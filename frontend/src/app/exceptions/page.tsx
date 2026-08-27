@@ -6,6 +6,7 @@ import {
   X, RotateCcw, AlertTriangle, Info, ShieldAlert,
   ChevronRight
 } from 'lucide-react';
+import { API_BASE } from "@/lib/config";
 
 interface SystemException {
   id: string;
@@ -40,7 +41,7 @@ export default function ExceptionsPage() {
       if (statusFilter) params.append('status', statusFilter);
       if (search) params.append('search', search);
 
-      const res = await fetch(`http://127.0.0.1:8000/api/exceptions?${params.toString()}`);
+      const res = await fetch(`${API_BASE}/exceptions?${params.toString()}`);
       if (res.ok) {
         setExceptions(await res.json());
       }
@@ -54,7 +55,7 @@ export default function ExceptionsPage() {
   const handleAction = async (action: 'retry' | 'resolve' | 'ignore') => {
     if (!selectedException) return;
     try {
-      const res = await fetch(`http://127.0.0.1:8000/api/exceptions/${selectedException.id}/action`, {
+      const res = await fetch(`${API_BASE}/exceptions/${selectedException.id}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })

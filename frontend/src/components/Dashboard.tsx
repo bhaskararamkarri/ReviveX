@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 
-const API_BASE = "http://localhost:8000/api";
+import { API_BASE } from "@/lib/config";
 
 const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f43f5e', '#f59e0b'];
 const ACTION_COLORS: any = {

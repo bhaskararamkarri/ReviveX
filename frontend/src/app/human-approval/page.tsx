@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { ActionButtons } from './ActionButtons';
+import { API_BASE } from "@/lib/config";
 
 async function getPendingCases() {
   try {
-    const res = await fetch('http://127.0.0.1:8000/api/cases?limit=100', { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/cases?limit=100`, { cache: 'no-store' });
     if (!res.ok) return [];
     const cases = await res.json();
     return cases.filter((c: any) => c.status === 'pending_human_review');

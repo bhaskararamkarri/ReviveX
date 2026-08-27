@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Settings, Save, RotateCcw, AlertTriangle, ShieldCheck, Link2, CheckCircle2 } from 'lucide-react';
+import { API_BASE } from "@/lib/config";
 
 interface SettingsData {
   max_retries: number;
@@ -32,7 +33,7 @@ export default function SettingsPage() {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/settings');
+      const res = await fetch(`${API_BASE}/settings`);
       if (res.ok) {
         setSettings(await res.json());
       }
@@ -47,7 +48,7 @@ export default function SettingsPage() {
     if (!settings) return;
     setSaving(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/settings', {
+      const res = await fetch(`${API_BASE}/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(settings)
@@ -75,7 +76,7 @@ export default function SettingsPage() {
   const handleTestAi = async () => {
     setAiStatus('testing');
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/settings/test-ai', { method: 'POST' });
+      const res = await fetch(`${API_BASE}/settings/test-ai`, { method: 'POST' });
       const data = await res.json();
       if (data.status === 'success') {
         setAiStatus('success');

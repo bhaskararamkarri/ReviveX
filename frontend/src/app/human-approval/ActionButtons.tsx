@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Check, X, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { API_BASE } from "@/lib/config";
 
 export function ActionButtons({ caseId }: { caseId: string }) {
   const router = useRouter();
@@ -11,7 +12,7 @@ export function ActionButtons({ caseId }: { caseId: string }) {
   const handleAction = async (action: 'retry' | 'stop') => {
     try {
       setLoading(action);
-      const res = await fetch(`http://127.0.0.1:8000/api/cases/${caseId}/action`, {
+      const res = await fetch(`${API_BASE}/cases/${caseId}/action`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action })

@@ -16,13 +16,20 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="ReviveX MVP API")
 
+frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[frontend_url],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# SECURITY NOTE: Production Deployment Authentication Requirement
+# This MVP currently lacks API authentication. Before deploying to production with real
+# user data or financial transactions, a robust authentication middleware (e.g., JWT, OAuth2, 
+# or Supabase Auth) MUST be implemented to protect these endpoints.
 
 @app.get("/")
 def read_root():

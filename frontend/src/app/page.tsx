@@ -1,28 +1,47 @@
 import { DashboardCharts } from '@/components/DashboardCharts';
+import { API_BASE } from "@/lib/config";
 import Link from 'next/link';
 
 async function getStats() {
   try {
-    const res = await fetch('http://127.0.0.1:8000/api/dashboard/stats', { cache: 'no-store' });
-    if (!res.ok) return null;
+    const res = await fetch(`${API_BASE}/dashboard/stats`, { cache: 'no-store' });
+    if (!res.ok) {
+        console.error("Failed to fetch dashboard stats, status:", res.status);
+        return null;
+    }
     return res.json();
-  } catch(e) { return null; }
+  } catch(error) {
+    console.error("Error fetching dashboard stats:", error);
+    return null;
+  }
 }
 
 async function getBreakdown() {
   try {
-    const res = await fetch('http://127.0.0.1:8000/api/dashboard/breakdown', { cache: 'no-store' });
-    if (!res.ok) return null;
+    const res = await fetch(`${API_BASE}/dashboard/breakdown`, { cache: 'no-store' });
+    if (!res.ok) {
+        console.error("Failed to fetch dashboard breakdown, status:", res.status);
+        return null;
+    }
     return res.json();
-  } catch(e) { return null; }
+  } catch(error) {
+    console.error("Error fetching dashboard breakdown:", error);
+    return null;
+  }
 }
 
 async function getCases() {
   try {
-    const res = await fetch('http://127.0.0.1:8000/api/cases?limit=20', { cache: 'no-store' });
-    if (!res.ok) return [];
+    const res = await fetch(`${API_BASE}/cases?limit=20`, { cache: 'no-store' });
+    if (!res.ok) {
+        console.error("Failed to fetch dashboard cases, status:", res.status);
+        return [];
+    }
     return res.json();
-  } catch(e) { return []; }
+  } catch(error) {
+    console.error("Error fetching dashboard cases:", error);
+    return [];
+  }
 }
 
 export default async function Dashboard() {

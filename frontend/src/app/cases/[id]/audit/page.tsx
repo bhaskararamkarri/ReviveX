@@ -1,8 +1,10 @@
 import Link from 'next/link';
+import { ArrowLeft, Clock, Shield, Search, User } from 'lucide-react';
+import { API_BASE } from "@/lib/config";
 
 async function getAuditLogs(id: string) {
   try {
-    const res = await fetch(`http://127.0.0.1:8000/api/cases/${id}/audit`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/cases/${id}/audit`, { cache: 'no-store' });
     if (!res.ok) return [];
     return res.json();
   } catch(e) { return []; }
