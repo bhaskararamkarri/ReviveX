@@ -16,6 +16,13 @@ class Merchant(Base):
     transactions = relationship("Transaction", back_populates="merchant")
     rules = relationship("AgentRule", back_populates="merchant")
 
+class WebhookEvent(Base):
+    __tablename__ = "webhook_events"
+    id = Column(String, primary_key=True) # x-razorpay-event-id
+    event_type = Column(String, index=True)
+    payload = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Transaction(Base):
     __tablename__ = "transactions"
     id = Column(String, primary_key=True, default=generate_uuid)
@@ -26,6 +33,8 @@ class Transaction(Base):
     payment_method = Column(String)
     error_code = Column(String, nullable=True)
     error_description = Column(String, nullable=True)
+    webhook_event_type = Column(String, nullable=True)
+    event_timestamp = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     merchant = relationship("Merchant", back_populates="transactions")
     recovery_case = relationship("RecoveryCase", back_populates="transaction", uselist=False)

@@ -108,3 +108,28 @@ class SystemExceptionResponse(BaseModel):
     resolved_at: Optional[datetime] = None
     resolved_by: Optional[str] = None
 
+class SimulatorPayload(BaseModel):
+    scenario: str # "temporary_failure", "hard_decline", "unknown", "high_value", "retry_limit", "abandoned", "fraud"
+    amount: float = 2500.0
+    retry_count: int = 0
+    fraud_flag: bool = False
+
+class StageTrace(BaseModel):
+    stage: str
+    status: str
+    service: str
+    method: str
+    duration_ms: int
+    input_data: Optional[Dict[str, Any]] = None
+    output_data: Optional[Dict[str, Any]] = None
+    rules_applied: Optional[str] = None
+    reason: Optional[str] = None
+    db_operation: Optional[str] = None
+    next_stage: Optional[str] = None
+
+class SimulatorResult(BaseModel):
+    scenario: str
+    amount: float
+    final_action: str
+    traces: List[StageTrace]
+    audit_trail: List[Dict[str, Any]]

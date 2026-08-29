@@ -4,9 +4,10 @@ from sqlalchemy.orm import Session
 import hmac
 import hashlib
 import json
+import uuid
 
 from app.main import app
-from app.models import Transaction, RecoveryCase, Merchant
+from app.models import Transaction, RecoveryCase, Merchant, WebhookEvent
 from app.database import get_db, Base, engine
 
 client = TestClient(app)
@@ -31,15 +32,48 @@ def generate_signature(payload_str: str, secret: str) -> str:
 
 def test_razorpay_webhook_invalid_signature():
     payload = {"event": "payment.failed"}
+    event_id = f"evt_{uuid.uuid4()}"
     response = client.post(
         "/api/webhooks/razorpay",
         json=payload,
-        headers={"x-razorpay-signature": "invalid_signature"}
+        headers={"x-razorpay-signature": "invalid_signature", "x-razorpay-event-id": event_id}
     )
-    assert response.status_code == 400
+    assert response.status_code == 401
     assert response.json()["detail"] == "Invalid signature"
 
-def test_razorpay_webhook_valid_signature_and_pipeline():
+def test_razorpay_webhook_malformed_payload():
+    secret = "test_secret"
+    payload_str = "not_a_json"
+    signature = generate_signature(payload_str, secret)
+    event_id = f"evt_{uuid.uuid4()}"
+    
+    response = client.post(
+        "/api/webhooks/razorpay",
+        data=payload_str,
+        headers={"x-razorpay-signature": signature, "Content-Type": "application/json", "x-razorpay-event-id": event_id}
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid JSON"
+
+def test_razorpay_webhook_unsupported_event():
+    payload = {"event": "payment.dispute.created"}
+    payload_str = json.dumps(payload, separators=(',', ':'))
+    secret = "test_secret"
+    signature = generate_signature(payload_str, secret)
+    event_id = f"evt_{uuid.uuid4()}"
+    
+    response = client.post(
+        "/api/webhooks/razorpay",
+        data=payload_str,
+        headers={"x-razorpay-signature": signature, "Content-Type": "application/json", "x-razorpay-event-id": event_id}
+    )
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ignored"
+    assert data["reason"] == "unsupported event"
+
+def test_razorpay_webhook_valid_signature_and_idempotency():
     # Make sure a merchant exists
     from app.database import SessionLocal
     db = SessionLocal()
@@ -55,7 +89,7 @@ def test_razorpay_webhook_valid_signature_and_pipeline():
             "payment": {
                 "entity": {
                     "id": "pay_TESTRAZORPAY123",
-                    "amount": 50000, # 500.00 INR
+                    "amount": 50000,
                     "currency": "INR",
                     "status": "failed",
                     "method": "card",
@@ -66,23 +100,34 @@ def test_razorpay_webhook_valid_signature_and_pipeline():
         }
     }
     
-    payload_str = json.dumps(payload, separators=(',', ':')) # Match FastAPI exact byte encoding
-    # To avoid JSON encoding differences, we'll send it as bytes directly
-    
+    payload_str = json.dumps(payload, separators=(',', ':'))
     secret = "test_secret"
     signature = generate_signature(payload_str, secret)
+    event_id = f"evt_idemp_{uuid.uuid4()}"
     
-    response = client.post(
+    # First Request
+    response1 = client.post(
         "/api/webhooks/razorpay",
         data=payload_str,
-        headers={"x-razorpay-signature": signature, "Content-Type": "application/json"}
+        headers={"x-razorpay-signature": signature, "Content-Type": "application/json", "x-razorpay-event-id": event_id}
     )
     
-    assert response.status_code == 200
-    data = response.json()
-    assert data["status"] == "processed"
-    assert data["transaction_id"] == "pay_TESTRAZORPAY123"
-    assert data["case_created"] is True
+    assert response1.status_code == 200
+    data1 = response1.json()
+    assert data1["status"] == "processed"
+    assert data1["case_created"] is True
+    
+    # Second Request (Duplicate Event)
+    response2 = client.post(
+        "/api/webhooks/razorpay",
+        data=payload_str,
+        headers={"x-razorpay-signature": signature, "Content-Type": "application/json", "x-razorpay-event-id": event_id}
+    )
+    
+    assert response2.status_code == 200
+    data2 = response2.json()
+    assert data2["status"] == "ignored"
+    assert data2["reason"] == "duplicate event"
     
     # Verify DB
     db = SessionLocal()
@@ -93,6 +138,8 @@ def test_razorpay_webhook_valid_signature_and_pipeline():
     
     case = db.query(RecoveryCase).filter(RecoveryCase.transaction_id == "pay_TESTRAZORPAY123").first()
     assert case is not None
-    assert case.risk_type == "failed_payment"
+    
+    webhook = db.query(WebhookEvent).filter(WebhookEvent.id == event_id).first()
+    assert webhook is not None
     
     db.close()

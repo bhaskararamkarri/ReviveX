@@ -3,13 +3,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import os
+import logging
 from typing import Optional
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 from app import models, schemas
 from app.database import engine, get_db, SessionLocal
 from app.services.orchestrator import WorkflowOrchestrator
 from app.services.detection import DetectionEngine
 from app.services.razorpay import RazorpayWebhookService
+from app.services.simulator import SimulationEngine
 from app.scripts import generate_data
 
 models.Base.metadata.create_all(bind=engine)
@@ -300,22 +304,43 @@ def run_complete_recovery_pipeline(db: Session = Depends(get_db)):
 async def razorpay_webhook(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     payload_body = await request.body()
     signature = request.headers.get("x-razorpay-signature")
+    event_id = request.headers.get("x-razorpay-event-id")
     secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "test_secret")
     
+    logger.info(f"Received Razorpay webhook: event_id={event_id}")
+    
     if not RazorpayWebhookService.verify_signature(payload_body, signature, secret):
-        raise HTTPException(status_code=400, detail="Invalid signature")
+        logger.error(f"Invalid webhook signature for event {event_id}")
+        raise HTTPException(status_code=401, detail="Invalid signature")
         
     try:
         payload_json = await request.json()
     except Exception:
+        logger.error("Invalid JSON payload received")
         raise HTTPException(status_code=400, detail="Invalid JSON")
+        
+    if event_id:
+        existing_event = db.query(models.WebhookEvent).filter(models.WebhookEvent.id == event_id).first()
+        if existing_event:
+            logger.info(f"Duplicate webhook event ignored: {event_id}")
+            return {"status": "ignored", "reason": "duplicate event"}
+            
+        new_event = models.WebhookEvent(
+            id=event_id,
+            event_type=payload_json.get("event", "unknown"),
+            payload=payload_json
+        )
+        db.add(new_event)
         
     normalized_data = RazorpayWebhookService.normalize_event(payload_json)
     if not normalized_data:
+        logger.info(f"Webhook event type unsupported or malformed for event {event_id}")
+        db.commit() # Save the event log even if unsupported
         return {"status": "ignored", "reason": "unsupported event"}
         
     merchant = db.query(models.Merchant).first()
     if not merchant:
+        logger.error("Webhook processing failed: No merchant configured")
         raise HTTPException(status_code=500, detail="No merchant configured")
         
     transaction = db.query(models.Transaction).filter(models.Transaction.id == normalized_data["id"]).first()
@@ -328,21 +353,46 @@ async def razorpay_webhook(request: Request, background_tasks: BackgroundTasks, 
             
     db.commit()
     db.refresh(transaction)
+    logger.info(f"Database persistence complete for transaction {transaction.id}")
     
     case = DetectionEngine.detect_risk(db, transaction)
     if case:
-        db.add(case)
-        db.commit()
+        is_new_case = getattr(case, '_is_new', False) # Hacky, better to check if it's already in DB session differently? Wait, detect_risk handles it.
+        # Actually, detect_risk commits. If it's a new case, we should process it. 
+        # But how do we know if it was just created vs updated?
+        # A simple way: If the case was just created, it's open. If it already existed, it might also be open.
+        # Since this webhook is a NEW event (we passed idempotency check), it might contain new info (e.g. payment failed again).
+        # We SHOULD run the pipeline if the case is 'open'. But let's just run it if we successfully detected risk.
+        # If multiple webhooks come concurrently, the idempotency lock prevents duplicate processing.
         
         def process_async(case_id: str):
             db_session = SessionLocal()
             try:
                 db_case = db_session.query(models.RecoveryCase).filter(models.RecoveryCase.id == case_id).first()
-                if db_case:
+                if db_case and db_case.status == "open": # Prevent duplicate processing if already recovered/failed
                     WorkflowOrchestrator.process_case(db_session, db_case)
             finally:
                 db_session.close()
                 
-        background_tasks.add_task(process_async, case.id)
+        # Only start if the case is in 'open' status to avoid re-processing cases that are already human-review or recovered
+        if case.status == "open":
+            logger.info(f"Queueing case {case.id} for async AI diagnosis and orchestration")
+            background_tasks.add_task(process_async, case.id)
+        else:
+            logger.info(f"Case {case.id} is already in status {case.status}, skipping async orchestration")
         
     return {"status": "processed", "transaction_id": transaction.id, "case_created": bool(case)}
+
+@app.post("/api/simulator/run", response_model=schemas.SimulatorResult)
+async def run_simulator(payload: schemas.SimulatorPayload, db: Session = Depends(get_db)):
+    """
+    Safely runs the full pipeline for a simulated scenario without writing to the production database.
+    """
+    logger.info(f"Starting simulation for scenario: {payload.scenario}")
+    try:
+        result = SimulationEngine.run_scenario(payload, db)
+        return result
+    except Exception as e:
+        logger.error(f"Simulation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+

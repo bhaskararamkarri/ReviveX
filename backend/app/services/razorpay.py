@@ -12,6 +12,7 @@ class RazorpayWebhookService:
         Verifies the Razorpay webhook signature using HMAC SHA256.
         """
         if not signature_header or not secret:
+            logger.warning("Signature verification failed: Missing signature header or secret.")
             return False
             
         expected_signature = hmac.new(
@@ -20,7 +21,13 @@ class RazorpayWebhookService:
             hashlib.sha256
         ).hexdigest()
         
-        return hmac.compare_digest(expected_signature, signature_header)
+        is_valid = hmac.compare_digest(expected_signature, signature_header)
+        if not is_valid:
+            logger.warning("Signature verification failed: Signature mismatch.")
+        else:
+            logger.info("Signature verification successful.")
+            
+        return is_valid
 
     @staticmethod
     def normalize_event(payload_json: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -44,6 +51,11 @@ class RazorpayWebhookService:
             
             status = status_map.get(payment.get("status", ""), "failed")
             
+            from datetime import datetime
+            
+            created_at_ts = payment.get("created_at")
+            event_timestamp = datetime.utcfromtimestamp(created_at_ts) if created_at_ts else None
+
             normalized_tx = {
                 "id": payment["id"], 
                 "amount": float(payment.get("amount", 0)) / 100.0,
@@ -51,7 +63,9 @@ class RazorpayWebhookService:
                 "status": status,
                 "payment_method": payment.get("method", "unknown"),
                 "error_code": payment.get("error_code"),
-                "error_description": payment.get("error_description")
+                "error_description": payment.get("error_description"),
+                "webhook_event_type": event_type,
+                "event_timestamp": event_timestamp
             }
             
             return normalized_tx
