@@ -1,7 +1,8 @@
 # Backend
 backend/venv/
-backend/__pycache__/
-backend/*.pyc
+__pycache__/
+*.pyc
+*.pyo
 backend/.env
 backend/recoverai.db
 
