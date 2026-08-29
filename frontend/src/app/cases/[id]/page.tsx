@@ -1,12 +1,29 @@
 import Link from 'next/link';
 import { API_BASE } from "@/lib/config";
 
-async function getCase(id: string) {
+export const dynamic = 'force-dynamic';
+
+interface CaseDetailsData {
+  id: string;
+  transaction_id: string;
+  status: string;
+  final_action?: string | null;
+  risk_amount?: number | null;
+  recovered_amount?: number | null;
+  diagnosed_root_cause?: string | null;
+  confidence_score?: number | null;
+  recommended_action?: string | null;
+  signals?: Record<string, unknown> | null;
+}
+
+async function getCase(id: string): Promise<CaseDetailsData | null> {
   try {
     const res = await fetch(`${API_BASE}/cases/${id}`, { cache: 'no-store' });
     if (!res.ok) return null;
     return res.json();
-  } catch(e) { return null; }
+  } catch {
+    return null;
+  }
 }
 
 export default async function CaseDetails(props: { params: Promise<{ id: string }> }) {

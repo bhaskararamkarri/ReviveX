@@ -1,13 +1,25 @@
 import Link from 'next/link';
-import { ArrowLeft, Clock, Shield, Search, User } from 'lucide-react';
 import { API_BASE } from "@/lib/config";
 
-async function getAuditLogs(id: string) {
+export const dynamic = 'force-dynamic';
+
+interface AuditLogItem {
+  id: string;
+  recovery_case_id: string;
+  event: string;
+  actor: string;
+  details?: Record<string, unknown> | null;
+  timestamp: string;
+}
+
+async function getAuditLogs(id: string): Promise<AuditLogItem[]> {
   try {
     const res = await fetch(`${API_BASE}/cases/${id}/audit`, { cache: 'no-store' });
     if (!res.ok) return [];
     return res.json();
-  } catch(e) { return []; }
+  } catch {
+    return [];
+  }
 }
 
 export default async function AuditTimeline(props: { params: Promise<{ id: string }> }) {
@@ -24,7 +36,7 @@ export default async function AuditTimeline(props: { params: Promise<{ id: strin
 
       <div className="glass-panel p-8">
         <div className="relative border-l border-white/20 ml-4 space-y-8">
-          {logs.map((log: any) => (
+          {logs.map((log: AuditLogItem) => (
             <div key={log.id} className="relative pl-8">
               <div className="absolute -left-2.5 top-1.5 w-5 h-5 rounded-full bg-blue-500 border-4 border-[#0a0a0a] glow-primary"></div>
               

@@ -1,18 +1,27 @@
+# Environment & Secrets
+.env
+.env.*
+.env*
+*.env
+*.env.*
+backend/.env
+backend/.env*
+frontend/.env
+frontend/.env*
+frontend/.env.local
+frontend/.env.*.local
+
 # Backend
 backend/venv/
 __pycache__/
 *.pyc
 *.pyo
-backend/.env
 backend/recoverai.db
 
 # Frontend
 frontend/node_modules/
 frontend/.next/
 frontend/out/
-frontend/.env
-frontend/.env.local
-frontend/.env.*.local
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*

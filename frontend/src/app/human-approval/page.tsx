@@ -2,13 +2,25 @@ import Link from 'next/link';
 import { ActionButtons } from './ActionButtons';
 import { API_BASE } from "@/lib/config";
 
-async function getPendingCases() {
+export const dynamic = 'force-dynamic';
+
+interface PendingCase {
+  id: string;
+  transaction_id: string;
+  risk_amount: number;
+  diagnosed_root_cause?: string | null;
+  confidence_score?: number | null;
+  status: string;
+}
+
+async function getPendingCases(): Promise<PendingCase[]> {
   try {
-    const res = await fetch(`${API_BASE}/cases?limit=100`, { cache: 'no-store' });
+    const res = await fetch(`${API_BASE}/cases?status=pending_human_review&limit=100`, { cache: 'no-store' });
     if (!res.ok) return [];
-    const cases = await res.json();
-    return cases.filter((c: any) => c.status === 'pending_human_review');
-  } catch(e) { return []; }
+    return res.json();
+  } catch {
+    return [];
+  }
 }
 
 export default async function HumanApprovalQueue() {
@@ -39,7 +51,7 @@ export default async function HumanApprovalQueue() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {cases.map((c: any) => (
+              {cases.map((c: PendingCase) => (
                 <tr key={c.id} className="hover:bg-white/5 transition-colors">
                   <td className="px-6 py-4 font-mono text-xs text-white">
                     <Link href={`/cases/${c.id}`} className="hover:underline">{c.transaction_id}</Link>
@@ -74,3 +86,4 @@ export default async function HumanApprovalQueue() {
     </div>
   );
 }
+

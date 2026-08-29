@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  AlertOctagon, CheckCircle2, Clock, Search, Filter, 
+  AlertOctagon, CheckCircle2, Search, 
   X, RotateCcw, AlertTriangle, Info, ShieldAlert,
   ChevronRight
 } from 'lucide-react';
@@ -14,10 +14,39 @@ interface SystemException {
   severity: string;
   status: string;
   message: string;
-  details: any;
+  details: Record<string, unknown> | null;
   created_at: string;
   transaction_id?: string;
   recovery_case_id?: string;
+}
+
+function SeverityBadge({ severity }: { severity: string }) {
+  const map: Record<string, { c: string; i: React.ReactNode }> = {
+    CRITICAL: { c: 'text-red-400 bg-red-400/10 border-red-400/20', i: <ShieldAlert size={14} /> },
+    ERROR: { c: 'text-orange-400 bg-orange-400/10 border-orange-400/20', i: <AlertOctagon size={14} /> },
+    WARNING: { c: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20', i: <AlertTriangle size={14} /> },
+    INFO: { c: 'text-blue-400 bg-blue-400/10 border-blue-400/20', i: <Info size={14} /> },
+  };
+  const s = map[severity] || map.INFO;
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs border ${s.c}`}>
+      {s.i} {severity}
+    </span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    OPEN: 'text-yellow-400 bg-yellow-400/10',
+    IN_PROGRESS: 'text-blue-400 bg-blue-400/10',
+    RESOLVED: 'text-green-400 bg-green-400/10',
+    IGNORED: 'text-gray-400 bg-gray-400/10',
+  };
+  return (
+    <span className={`px-2 py-1 rounded text-xs ${map[status] || map.OPEN}`}>
+      {status}
+    </span>
+  );
 }
 
 export default function ExceptionsPage() {
@@ -30,11 +59,7 @@ export default function ExceptionsPage() {
   const [search, setSearch] = useState('');
   const [selectedException, setSelectedException] = useState<SystemException | null>(null);
 
-  useEffect(() => {
-    fetchExceptions();
-  }, [severityFilter, statusFilter, search]);
-
-  const fetchExceptions = async () => {
+  const fetchExceptions = React.useCallback(async () => {
     try {
       const params = new URLSearchParams();
       if (severityFilter) params.append('severity', severityFilter);
@@ -50,7 +75,33 @@ export default function ExceptionsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [severityFilter, statusFilter, search]);
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      try {
+        const params = new URLSearchParams();
+        if (severityFilter) params.append('severity', severityFilter);
+        if (statusFilter) params.append('status', statusFilter);
+        if (search) params.append('search', search);
+
+        const res = await fetch(`${API_BASE}/exceptions?${params.toString()}`);
+        if (res.ok && active) {
+          const data = await res.json();
+          setExceptions(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch exceptions', err);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    load();
+    return () => {
+      active = false;
+    };
+  }, [severityFilter, statusFilter, search]);
 
   const handleAction = async (action: 'retry' | 'resolve' | 'ignore') => {
     if (!selectedException) return;
@@ -68,7 +119,7 @@ export default function ExceptionsPage() {
         const error = await res.json();
         alert(`Failed: ${error.detail}`);
       }
-    } catch (err) {
+    } catch {
       alert('Error executing action');
     }
   };
@@ -78,35 +129,6 @@ export default function ExceptionsPage() {
     critical: exceptions.filter(e => e.severity === 'CRITICAL').length,
     open: exceptions.filter(e => e.status === 'OPEN').length,
     resolved: exceptions.filter(e => e.status === 'RESOLVED').length,
-  };
-
-  const SeverityBadge = ({ severity }: { severity: string }) => {
-    const map: Record<string, { c: string, i: any }> = {
-      CRITICAL: { c: 'text-red-400 bg-red-400/10 border-red-400/20', i: <ShieldAlert size={14} /> },
-      ERROR: { c: 'text-orange-400 bg-orange-400/10 border-orange-400/20', i: <AlertOctagon size={14} /> },
-      WARNING: { c: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20', i: <AlertTriangle size={14} /> },
-      INFO: { c: 'text-blue-400 bg-blue-400/10 border-blue-400/20', i: <Info size={14} /> },
-    };
-    const s = map[severity] || map.INFO;
-    return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs border ${s.c}`}>
-        {s.i} {severity}
-      </span>
-    );
-  };
-
-  const StatusBadge = ({ status }: { status: string }) => {
-    const map: Record<string, string> = {
-      OPEN: 'text-yellow-400 bg-yellow-400/10',
-      IN_PROGRESS: 'text-blue-400 bg-blue-400/10',
-      RESOLVED: 'text-green-400 bg-green-400/10',
-      IGNORED: 'text-gray-400 bg-gray-400/10',
-    };
-    return (
-      <span className={`px-2 py-1 rounded text-xs ${map[status] || map.OPEN}`}>
-        {status}
-      </span>
-    );
   };
 
   return (

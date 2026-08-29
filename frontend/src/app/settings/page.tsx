@@ -28,21 +28,25 @@ export default function SettingsPage() {
   const [aiMessage, setAiMessage] = useState('');
 
   useEffect(() => {
-    fetchSettings();
-  }, []);
-
-  const fetchSettings = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/settings`);
-      if (res.ok) {
-        setSettings(await res.json());
+    let active = true;
+    async function load() {
+      try {
+        const res = await fetch(`${API_BASE}/settings`);
+        if (res.ok && active) {
+          const data = await res.json();
+          setSettings(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch settings', err);
+      } finally {
+        if (active) setLoading(false);
       }
-    } catch (err) {
-      console.error('Failed to fetch settings', err);
-    } finally {
-      setLoading(false);
     }
-  };
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSave = async () => {
     if (!settings) return;
@@ -84,7 +88,7 @@ export default function SettingsPage() {
         setAiStatus('error');
         setAiMessage(data.message);
       }
-    } catch (err) {
+    } catch {
       setAiStatus('error');
       setAiMessage('Failed to connect to backend.');
     }

@@ -1,44 +1,57 @@
-import { DashboardCharts } from '@/components/DashboardCharts';
+import { DashboardCharts, DashboardStatsData, DashboardBreakdownData } from '@/components/DashboardCharts';
 import { API_BASE } from "@/lib/config";
 import Link from 'next/link';
 
-async function getStats() {
+export const dynamic = 'force-dynamic';
+
+interface RecoveryCaseItem {
+  id: string;
+  transaction_id: string;
+  status: string;
+  diagnosed_root_cause?: string | null;
+  risk_type?: string | null;
+  final_action?: string | null;
+  recommended_action?: string | null;
+  risk_amount?: number | null;
+}
+
+async function getStats(): Promise<DashboardStatsData | null> {
   try {
     const res = await fetch(`${API_BASE}/dashboard/stats`, { cache: 'no-store' });
     if (!res.ok) {
-        console.error("Failed to fetch dashboard stats, status:", res.status);
-        return null;
+      console.error("Failed to fetch dashboard stats, status:", res.status);
+      return null;
     }
     return res.json();
-  } catch(error) {
+  } catch (error) {
     console.error("Error fetching dashboard stats:", error);
     return null;
   }
 }
 
-async function getBreakdown() {
+async function getBreakdown(): Promise<DashboardBreakdownData | null> {
   try {
     const res = await fetch(`${API_BASE}/dashboard/breakdown`, { cache: 'no-store' });
     if (!res.ok) {
-        console.error("Failed to fetch dashboard breakdown, status:", res.status);
-        return null;
+      console.error("Failed to fetch dashboard breakdown, status:", res.status);
+      return null;
     }
     return res.json();
-  } catch(error) {
+  } catch (error) {
     console.error("Error fetching dashboard breakdown:", error);
     return null;
   }
 }
 
-async function getCases() {
+async function getCases(): Promise<RecoveryCaseItem[]> {
   try {
     const res = await fetch(`${API_BASE}/cases?limit=20`, { cache: 'no-store' });
     if (!res.ok) {
-        console.error("Failed to fetch dashboard cases, status:", res.status);
-        return [];
+      console.error("Failed to fetch dashboard cases, status:", res.status);
+      return [];
     }
     return res.json();
-  } catch(error) {
+  } catch (error) {
     console.error("Error fetching dashboard cases:", error);
     return [];
   }
@@ -85,9 +98,6 @@ export default async function Dashboard() {
       <div className="glass-panel overflow-hidden">
         <div className="p-6 border-b border-white/10 flex justify-between items-center">
           <h3 className="text-lg font-medium text-white">Recent Recovery Cases</h3>
-          <div className="flex gap-2">
-             <input type="text" placeholder="Filter by status..." className="bg-black/20 border border-white/10 rounded-md px-3 py-1 text-sm text-white focus:outline-none focus:border-blue-500" />
-          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-400">
@@ -102,9 +112,9 @@ export default async function Dashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/10">
-              {cases.map((c: any) => (
+              {cases.map((c: RecoveryCaseItem) => (
                 <tr key={c.id} className="hover:bg-white/5 transition-colors">
-                  <td className="px-6 py-4 font-mono text-xs">{c.transaction_id.substring(0, 12)}...</td>
+                  <td className="px-6 py-4 font-mono text-xs text-gray-300">{c.transaction_id.substring(0, 12)}...</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded text-xs font-medium ${
                       c.status === 'recovered' ? 'bg-green-500/20 text-green-400 border border-green-500/20' : 
@@ -117,7 +127,7 @@ export default async function Dashboard() {
                   </td>
                   <td className="px-6 py-4">{c.diagnosed_root_cause || c.risk_type || 'pending'}</td>
                   <td className="px-6 py-4">{c.final_action || c.recommended_action || '-'}</td>
-                  <td className="px-6 py-4">₹{c.risk_amount}</td>
+                  <td className="px-6 py-4">₹{c.risk_amount ?? 0}</td>
                   <td className="px-6 py-4 text-right">
                     <Link href={`/cases/${c.id}`} className="text-blue-400 hover:text-blue-300 font-medium">View Details</Link>
                   </td>
@@ -135,3 +145,4 @@ export default async function Dashboard() {
     </div>
   );
 }
+

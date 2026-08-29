@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import text
+from sqlalchemy import text, func
 import os
 import logging
 from typing import Optional
@@ -49,47 +49,73 @@ def health_check(db: Session = Depends(get_db)):
 
 @app.get("/api/dashboard/stats")
 def get_dashboard_stats(db: Session = Depends(get_db)):
-    transactions = db.query(models.Transaction).all()
-    cases = db.query(models.RecoveryCase).all()
-    
-    total_at_risk = sum(t.amount for t in transactions if t.status in ["failed", "abandoned"])
-    total_recovered = sum(t.amount for t in transactions for c in cases if c.transaction_id == t.id and c.status == "recovered")
-    
-    cases_processed = len(cases)
-    recovery_rate = (len([c for c in cases if c.status == "recovered"]) / cases_processed * 100) if cases_processed > 0 else 0
+    # Direct high-performance SQL aggregations
+    total_at_risk = db.query(
+        func.coalesce(func.sum(models.Transaction.amount), 0.0)
+    ).filter(
+        models.Transaction.status.in_(["failed", "abandoned"])
+    ).scalar() or 0.0
+
+    total_recovered = db.query(
+        func.coalesce(func.sum(models.Transaction.amount), 0.0)
+    ).select_from(models.Transaction).join(
+        models.RecoveryCase, models.RecoveryCase.transaction_id == models.Transaction.id
+    ).filter(
+        models.RecoveryCase.status == "recovered"
+    ).scalar() or 0.0
+
+    cases_processed = db.query(func.count(models.RecoveryCase.id)).scalar() or 0
+    recovered_cases = db.query(func.count(models.RecoveryCase.id)).filter(
+        models.RecoveryCase.status == "recovered"
+    ).scalar() or 0
+
+    recovery_rate = (recovered_cases / cases_processed * 100) if cases_processed > 0 else 0.0
 
     return {
-        "revenue_at_risk": total_at_risk,
-        "revenue_recovered": total_recovered,
-        "recovery_rate": round(recovery_rate, 2),
-        "cases_processed": cases_processed
+        "revenue_at_risk": float(total_at_risk),
+        "revenue_recovered": float(total_recovered),
+        "recovery_rate": round(float(recovery_rate), 2),
+        "cases_processed": int(cases_processed)
     }
 
 @app.get("/api/dashboard/breakdown")
 def get_dashboard_breakdown(db: Session = Depends(get_db)):
-    cases = db.query(models.RecoveryCase).all()
-    
-    root_cause_counts = {}
-    action_counts = {}
-    
-    for case in cases:
-        if case.diagnosed_root_cause:
-            root_cause_counts[case.diagnosed_root_cause] = root_cause_counts.get(case.diagnosed_root_cause, 0) + 1
-        if case.final_action:
-            action_counts[case.final_action] = action_counts.get(case.final_action, 0) + 1
-            
-    root_cause_data = [{"name": k, "value": v} for k, v in root_cause_counts.items()]
-    action_data = [{"name": k, "value": v} for k, v in action_counts.items()]
-    
+    root_cause_rows = db.query(
+        models.RecoveryCase.diagnosed_root_cause,
+        func.count(models.RecoveryCase.id)
+    ).filter(
+        models.RecoveryCase.diagnosed_root_cause.isnot(None)
+    ).group_by(models.RecoveryCase.diagnosed_root_cause).all()
+
+    action_rows = db.query(
+        models.RecoveryCase.final_action,
+        func.count(models.RecoveryCase.id)
+    ).filter(
+        models.RecoveryCase.final_action.isnot(None)
+    ).group_by(models.RecoveryCase.final_action).all()
+
+    root_cause_data = [{"name": row[0], "value": row[1]} for row in root_cause_rows]
+    action_data = [{"name": row[0], "value": row[1]} for row in action_rows]
+
     return {
         "root_causes": root_cause_data,
         "actions": action_data
     }
 
 @app.get("/api/cases", response_model=list[schemas.RecoveryCaseResponse])
-def get_cases(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    cases = db.query(models.RecoveryCase).offset(skip).limit(limit).all()
-    return cases
+def get_cases(
+    status: Optional[str] = None,
+    risk_type: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    query = db.query(models.RecoveryCase)
+    if status:
+        query = query.filter(models.RecoveryCase.status == status)
+    if risk_type:
+        query = query.filter(models.RecoveryCase.risk_type == risk_type)
+    return query.order_by(models.RecoveryCase.created_at.desc()).offset(skip).limit(limit).all()
 
 @app.get("/api/cases/{case_id}", response_model=schemas.RecoveryCaseResponse)
 def get_case(case_id: str, db: Session = Depends(get_db)):

@@ -1,10 +1,33 @@
 "use client";
 
+import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+
+export interface DashboardStatsData {
+  revenue_at_risk: number;
+  revenue_recovered: number;
+  recovery_rate: number;
+  cases_processed: number;
+}
+
+export interface BreakdownItem {
+  name: string;
+  value: number;
+}
+
+export interface DashboardBreakdownData {
+  root_causes: BreakdownItem[];
+  actions: BreakdownItem[];
+}
+
+export interface DashboardChartsProps {
+  breakdown: DashboardBreakdownData | null;
+  stats: DashboardStatsData | null;
+}
 
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
-export function DashboardCharts({ breakdown, stats }: { breakdown: any, stats: any }) {
+export function DashboardCharts({ breakdown, stats }: DashboardChartsProps) {
   if (!breakdown || !stats) return null;
 
   const revData = [
@@ -21,7 +44,7 @@ export function DashboardCharts({ breakdown, stats }: { breakdown: any, stats: a
             <BarChart data={revData}>
               <XAxis dataKey="name" stroke="#6b7280" />
               <YAxis stroke="#6b7280" />
-              <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)'}} />
+              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)' }} />
               <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -42,11 +65,11 @@ export function DashboardCharts({ breakdown, stats }: { breakdown: any, stats: a
                 paddingAngle={5}
                 dataKey="value"
               >
-                {breakdown.root_causes.map((entry: any, index: number) => (
+                {breakdown.root_causes.map((_, index: number) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{backgroundColor: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)'}} />
+              <Tooltip contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)' }} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -59,7 +82,7 @@ export function DashboardCharts({ breakdown, stats }: { breakdown: any, stats: a
             <BarChart data={breakdown.actions} layout="vertical">
               <XAxis type="number" stroke="#6b7280" />
               <YAxis dataKey="name" type="category" stroke="#6b7280" width={100} />
-              <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} contentStyle={{backgroundColor: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)'}} />
+              <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ backgroundColor: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)' }} />
               <Bar dataKey="value" fill="#10b981" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -68,3 +91,4 @@ export function DashboardCharts({ breakdown, stats }: { breakdown: any, stats: a
     </div>
   );
 }
+
