@@ -142,7 +142,11 @@ class SimulationEngine:
         
         # --- STAGE 04: TRANSACTION PERSISTED ---
         start_time = time.time()
-        transaction = Transaction(merchant_id="sim_merchant", **normalized_data)
+        transaction = Transaction(
+            merchant_id="sim_merchant", 
+            created_at=datetime.now(timezone.utc),
+            **normalized_data
+        )
         
         sim_db.add(transaction)
         sim_db.flush()
