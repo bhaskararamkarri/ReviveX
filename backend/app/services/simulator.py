@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect
 
-from app.models import Transaction, RecoveryCase, AuditLog, WebhookEvent, AgentRule
+from app.models import Transaction, RecoveryCase, RecoveryAction, AuditLog, WebhookEvent, AgentRule
 from app.schemas import SimulatorPayload, SimulatorResult, StageTrace, RootCauseEnum, RecommendedActionEnum
 from app.services.razorpay import RazorpayWebhookService
 from app.services.detection import DetectionEngine
