@@ -281,15 +281,23 @@ class SimulationEngine:
         audit_trail.append({"timestamp": datetime.now(timezone.utc).isoformat(), "event": "ACTION_EXECUTED", "service": "SYSTEM", "result": final_action_val})
         audit_trail.append({"timestamp": datetime.now(timezone.utc).isoformat(), "event": "OUTCOME_RECORDED", "service": "SYSTEM", "result": case.status})
         
+        # 3. Extract action details (e.g. payment_link_id, short_url, mode)
+        recovery_action = next((obj for obj in sim_db.added_objects if isinstance(obj, RecoveryAction)), None)
+        action_details = getattr(recovery_action, "action_details", {}) if recovery_action else {}
+
         traces.append(StageTrace(
             stage="RECOVERY ACTION & OUTCOME",
-            status="SUCCESS" if case.status == "recovered" else ("FAILED" if case.status == "failed" else "PENDING"),
+            status="SUCCESS" if case.status == "recovered" or action_details.get("mode") == "live_test" else ("FAILED" if case.status == "failed" else "PENDING"),
             service="RecoveryEngine",
             method="execute_action",
             duration_ms=int((time.time() - start_time) * 1000) + 2,
-            input_data={"action": final_action_val, "mode": "DRY RUN"},
-            output_data={"case_status": case.status, "recovered_amount": transaction.amount if case.status == "recovered" else 0.0},
-            reason="Simulated execution of the decided action.",
+            input_data={"action": final_action_val, "mode": action_details.get("mode", "dry_run_simulation")},
+            output_data={
+                "case_status": case.status, 
+                "recovered_amount": transaction.amount if case.status == "recovered" else 0.0,
+                "action_details": action_details
+            },
+            reason="Executed the decided recovery action." if action_details.get("mode") == "live_test" else "Simulated execution of the decided action.",
             db_operation=db_op,
             next_stage="AUDIT"
         ))

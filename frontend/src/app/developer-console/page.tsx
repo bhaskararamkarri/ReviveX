@@ -4,6 +4,21 @@ import React, { useState } from 'react';
 import { Play, ShieldAlert, CheckCircle2, AlertTriangle, Code, Database, Search, FileJson, Clock, Loader2, ArrowRight } from 'lucide-react';
 import { API_BASE } from '@/lib/config';
 
+interface ActionDetails {
+  payment_link_id?: string;
+  short_url?: string;
+  mode?: string;
+  created_at?: string;
+  error?: string;
+}
+
+interface OutputData {
+  case_status?: string;
+  recovered_amount?: number;
+  action_details?: ActionDetails;
+  [key: string]: unknown;
+}
+
 type StageTrace = {
   stage: string;
   status: string;
@@ -11,7 +26,7 @@ type StageTrace = {
   method: string;
   duration_ms: number;
   input_data?: Record<string, unknown>;
-  output_data?: Record<string, unknown>;
+  output_data?: OutputData;
   rules_applied?: string;
   reason?: string;
   db_operation?: string;
@@ -297,6 +312,19 @@ export default function DeveloperConsole() {
                           <p className="text-indigo-300 bg-indigo-500/10 p-2 rounded-lg border border-indigo-500/20 font-mono text-xs">
                             {result.traces[selectedTraceIndex].rules_applied}
                           </p>
+                        </div>
+                      )}
+                      {result.traces[selectedTraceIndex].output_data?.action_details?.short_url && (
+                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                          <span className="text-xs text-emerald-400 font-semibold block mb-1">Razorpay Test Payment Link:</span>
+                          <a 
+                            href={result.traces[selectedTraceIndex].output_data.action_details.short_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-2 text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium transition-colors"
+                          >
+                            Open Razorpay Test Checkout ↗
+                          </a>
                         </div>
                       )}
                       <div>

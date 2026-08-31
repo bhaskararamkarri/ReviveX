@@ -5,7 +5,7 @@ from sqlalchemy import text, func
 import os
 import logging
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 from app import models, schemas
@@ -369,28 +369,69 @@ async def razorpay_webhook(request: Request, background_tasks: BackgroundTasks, 
         logger.error("Webhook processing failed: No merchant configured")
         raise HTTPException(status_code=500, detail="No merchant configured")
         
+    # Filter transaction fields for ORM persistence
+    tx_fields = {k: v for k, v in normalized_data.items() if hasattr(models.Transaction, k)}
+    
     transaction = db.query(models.Transaction).filter(models.Transaction.id == normalized_data["id"]).first()
     if not transaction:
-        transaction = models.Transaction(merchant_id=merchant.id, **normalized_data)
+        transaction = models.Transaction(merchant_id=merchant.id, **tx_fields)
         db.add(transaction)
     else:
-        for k, v in normalized_data.items():
+        for k, v in tx_fields.items():
             setattr(transaction, k, v)
             
     db.commit()
     db.refresh(transaction)
     logger.info(f"Database persistence complete for transaction {transaction.id}")
     
+    # Check if this is a payment link paid settlement event
+    if normalized_data.get("webhook_event_type") == "payment_link.paid":
+        ref_case_id = normalized_data.get("reference_id") or normalized_data.get("notes", {}).get("revivex_case_id")
+        target_case = None
+        if ref_case_id:
+            target_case = db.query(models.RecoveryCase).filter(models.RecoveryCase.id == ref_case_id).first()
+            
+        if not target_case:
+            # Try finding via RecoveryAction details
+            plink_id = normalized_data.get("payment_link_id")
+            if plink_id:
+                action = db.query(models.RecoveryAction).filter(
+                    models.RecoveryAction.action_details.op("->>")("payment_link_id") == plink_id
+                ).first()
+                if action:
+                    target_case = db.query(models.RecoveryCase).filter(models.RecoveryCase.id == action.recovery_case_id).first()
+                    
+        if target_case:
+            target_case.status = "recovered"
+            target_case.updated_at = datetime.now(timezone.utc)
+            
+            # Update associated RecoveryActions
+            for act in target_case.actions:
+                if act.status in ["pending", "link_created"]:
+                    act.status = "paid"
+                    act.updated_at = datetime.now(timezone.utc)
+                    
+            # Record audit trail
+            audit = models.AuditLog(
+                recovery_case_id=target_case.id,
+                transaction_id=target_case.transaction_id,
+                event="OUTCOME_RECORDED",
+                actor="RAZORPAY_WEBHOOK",
+                details={
+                    "settlement": "payment_link.paid",
+                    "payment_id": transaction.id,
+                    "payment_link_id": normalized_data.get("payment_link_id"),
+                    "amount_recovered": float(transaction.amount),
+                    "recovered_at": datetime.now(timezone.utc).isoformat()
+                }
+            )
+            db.add(audit)
+            db.commit()
+            logger.info(f"Settled RecoveryCase {target_case.id} as RECOVERED via Razorpay Payment Link webhook.")
+            return {"status": "processed", "transaction_id": transaction.id, "case_recovered": True, "case_id": target_case.id}
+
     case = DetectionEngine.detect_risk(db, transaction)
     if case:
-        is_new_case = getattr(case, '_is_new', False) # Hacky, better to check if it's already in DB session differently? Wait, detect_risk handles it.
-        # Actually, detect_risk commits. If it's a new case, we should process it. 
-        # But how do we know if it was just created vs updated?
-        # A simple way: If the case was just created, it's open. If it already existed, it might also be open.
-        # Since this webhook is a NEW event (we passed idempotency check), it might contain new info (e.g. payment failed again).
-        # We SHOULD run the pipeline if the case is 'open'. But let's just run it if we successfully detected risk.
-        # If multiple webhooks come concurrently, the idempotency lock prevents duplicate processing.
-        
         def process_async(case_id: str):
             db_session = SessionLocal()
             try:
