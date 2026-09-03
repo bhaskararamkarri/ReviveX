@@ -242,47 +242,7 @@ function RecoveryContent() {
         </p>
       </div>
 
-      {/* Breadcrumb & Navigation Bar matching reference */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-gray-400">ReviveX</span>
-          <span className="text-gray-600">&gt;</span>
-          <span className="text-white font-semibold">Recovery Execution Monitor</span>
-        </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Quick Search */}
-          <div className="relative hidden md:block">
-            <input 
-              type="text" 
-              placeholder="Search or jump to..." 
-              readOnly
-              className="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 w-44 focus:outline-none cursor-pointer"
-            />
-            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-400 font-mono">⌘K</span>
-          </div>
-
-          {/* Active Incident Tag */}
-          <Link href="/incidents" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/15 border border-red-500/30 text-red-300 text-xs hover:bg-red-500/20 transition-colors">
-            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-            <span>Active Incident: UPI Degradation</span>
-            <span className="font-mono text-[10px] bg-red-500/20 px-1 rounded text-red-200">RC-001</span>
-          </Link>
-
-          {/* Test Mode Badge */}
-          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-300 text-xs font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-            <span>Test Mode</span>
-          </span>
-
-          {/* Merchant Dropdown */}
-          <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-xs text-gray-200">
-            <Building2 size={13} className="text-purple-400" />
-            <span className="font-semibold">Acme Commerce</span>
-            <ChevronDown size={12} className="text-gray-400" />
-          </div>
-        </div>
-      </div>
 
       {/* Circuit Breaker Alert Banner if Triggered */}
       {circuitBreakerTripped && (
