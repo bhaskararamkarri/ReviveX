@@ -1,440 +1,564 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { 
   Repeat, Radio, ShieldCheck, ShieldAlert, AlertTriangle, 
-  CheckCircle2, Play, Pause, Square, RefreshCw, ArrowRight,
-  TrendingUp, Activity, Lock, Zap, Clock, Ban
+  CheckCircle2, XCircle, Play, Pause, RefreshCw, ArrowRight,
+  Zap, Clock, Search, ExternalLink, Filter, ChevronDown, Check,
+  Activity, Sparkles, Building2, Lock
 } from 'lucide-react';
 import { API_BASE } from "@/lib/config";
 
-interface Batch {
+interface StreamEvent {
   id: string;
-  name: string;
-  status: string;
-  total_transactions: number;
-  processed_transactions: number;
-  successful_recoveries: number;
-  failed_recoveries: number;
-  failure_rate: number;
-  recovered_amount: number;
-  created_at: string;
+  timestamp: string;
+  status: 'recovered' | 'failed' | 'milestone';
+  txId?: string;
+  customerName?: string;
+  amount?: number;
+  reason?: string;
+  latencyMs: number;
+  customMessage?: string;
 }
+
+const INITIAL_EVENTS: StreamEvent[] = [
+  {
+    id: 'evt-milestone-1',
+    timestamp: '11:05:04 AM',
+    status: 'milestone',
+    customMessage: 'Batch fast-forwarded to completion. ₹2,86,000 recovered across 167 transactions. Final recovery rate: 42.7%.',
+    latencyMs: 142
+  },
+  {
+    id: 'evt-1103',
+    timestamp: '11:05:04 AM',
+    status: 'recovered',
+    txId: 'TX-1103',
+    customerName: 'Kavita Reddy',
+    amount: 4800,
+    latencyMs: 139
+  },
+  {
+    id: 'evt-1102',
+    timestamp: '11:05:03 AM',
+    status: 'recovered',
+    txId: 'TX-1102',
+    customerName: 'Divya Rao',
+    amount: 3800,
+    latencyMs: 302
+  },
+  {
+    id: 'evt-1101',
+    timestamp: '11:05:03 AM',
+    status: 'failed',
+    txId: 'TX-1101',
+    customerName: 'Ishaan Joshi',
+    reason: 'Bank timeout',
+    latencyMs: 515
+  },
+  {
+    id: 'evt-1100',
+    timestamp: '11:05:02 AM',
+    status: 'recovered',
+    txId: 'TX-1100',
+    customerName: 'Vikram Nair',
+    amount: 1250,
+    latencyMs: 231
+  },
+  {
+    id: 'evt-1099',
+    timestamp: '11:05:02 AM',
+    status: 'recovered',
+    txId: 'TX-1099',
+    customerName: 'Sneha Patel',
+    amount: 4100,
+    latencyMs: 165
+  },
+  {
+    id: 'evt-1098',
+    timestamp: '11:05:01 AM',
+    status: 'failed',
+    txId: 'TX-1098',
+    customerName: 'Rohan Gupta',
+    reason: 'Bank timeout',
+    latencyMs: 209
+  },
+  {
+    id: 'evt-1097',
+    timestamp: '11:05:01 AM',
+    status: 'recovered',
+    txId: 'TX-1097',
+    customerName: 'Ananya Singh',
+    amount: 1890,
+    latencyMs: 287
+  },
+  {
+    id: 'evt-1096',
+    timestamp: '11:05:01 AM',
+    status: 'recovered',
+    txId: 'TX-1096',
+    customerName: 'Rahul Verma',
+    amount: 12500,
+    latencyMs: 301
+  }
+];
+
+const SIMULATED_CUSTOMER_NAMES = [
+  'Priya Sharma', 'Amit Kumar', 'Meera Iyer', 'Aditya Sen', 'Pooja Deshmukh',
+  'Rajesh Nair', 'Deepa Menon', 'Kunal Shah', 'Neha Agarwal', 'Siddharth Roy'
+];
+
+const SIMULATED_FAILURE_REASONS = [
+  'Bank timeout', 'UPI gateway latency', 'Card 3DS timeout', 'Network unreachable', 'Issuer node busy'
+];
 
 function RecoveryContent() {
   const searchParams = useSearchParams();
-  const initialTab = searchParams.get('tab') === 'active' ? 'active' : 'operations';
+  const initialTab = searchParams.get('tab') === 'active' ? 'active' : 'active'; // Default to active monitor matching user intent
   const [activeTab, setActiveTab] = useState<'operations' | 'active'>(initialTab);
 
-  const [batches, setBatches] = useState<Batch[]>([]);
-  const [selectedBatch, setSelectedBatch] = useState<Batch | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [circuitBreakerAlert, setCircuitBreakerAlert] = useState<string | null>(null);
-  const [authorizing, setAuthorizing] = useState(false);
-  const [authSuccess, setAuthSuccess] = useState(false);
+  // Real-time Telemetry State
+  const [batchId] = useState('RB-024');
+  const [totalTxns] = useState(438);
+  const [processedTxns, setProcessedTxns] = useState(391);
+  const [successfulRecoveries, setSuccessfulRecoveries] = useState(167);
+  const [failedRecoveries, setFailedRecoveries] = useState(224);
+  const [recoveredAmount, setRecoveredAmount] = useState(286000);
+  const [isStreaming, setIsStreaming] = useState(true);
+  const [circuitBreakerTripped, setCircuitBreakerTripped] = useState(false);
+  const [streamFilter, setStreamFilter] = useState<'all' | 'recovered' | 'failed'>('all');
 
-  const loadBatches = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/batches`);
-      if (res.ok) {
-        const data: Batch[] = await res.json();
-        setBatches(data);
-        if (data.length > 0 && !selectedBatch) {
-          setSelectedBatch(data[0]);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  // Stream Log
+  const [events, setEvents] = useState<StreamEvent[]>(INITIAL_EVENTS);
+  const nextTxIdRef = useRef(1104);
+
+  // Fast-Forward Handler
+  const handleFastForward = () => {
+    if (processedTxns >= totalTxns) return;
+
+    const remaining = totalTxns - processedTxns;
+    const additionalSuccessful = Math.floor(remaining * 0.45);
+    const additionalFailed = remaining - additionalSuccessful;
+    const additionalAmount = additionalSuccessful * 2400;
+
+    const newProcessed = totalTxns;
+    const newSuccessful = successfulRecoveries + additionalSuccessful;
+    const newFailed = failedRecoveries + additionalFailed;
+    const newAmount = recoveredAmount + additionalAmount;
+
+    setProcessedTxns(newProcessed);
+    setSuccessfulRecoveries(newSuccessful);
+    setFailedRecoveries(newFailed);
+    setRecoveredAmount(newAmount);
+
+    const completionRate = ((newSuccessful / newProcessed) * 100).toFixed(1);
+    const formattedAmount = `₹${newAmount.toLocaleString('en-IN')}`;
+
+    const milestoneEvent: StreamEvent = {
+      id: `milestone-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      status: 'milestone',
+      customMessage: `Batch fast-forwarded to completion. ${formattedAmount} recovered across ${newSuccessful} transactions. Final recovery rate: ${completionRate}%.`,
+      latencyMs: 120
+    };
+
+    setEvents(prev => [milestoneEvent, ...prev]);
+    setIsStreaming(false);
   };
 
+  // Circuit Breaker Demo Handler
+  const handleTriggerCircuitBreaker = () => {
+    setCircuitBreakerTripped(true);
+    setIsStreaming(false);
+
+    const shutdownEvent: StreamEvent = {
+      id: `breaker-${Date.now()}`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      status: 'milestone',
+      customMessage: `[CIRCUIT_BREAKER_TRIGGERED] Observed failure rate 57.3% exceeded max policy limit. Deterministically halted all recovery retries.`,
+      latencyMs: 85
+    };
+
+    setEvents(prev => [shutdownEvent, ...prev]);
+  };
+
+  // Live streaming interval simulator
   useEffect(() => {
-    loadBatches();
-  }, []);
+    if (!isStreaming || circuitBreakerTripped || processedTxns >= totalTxns) return;
 
-  useEffect(() => {
-    if (searchParams.get('tab') === 'active') {
-      setActiveTab('active');
-    }
-  }, [searchParams]);
+    const interval = setInterval(() => {
+      const currentTxNum = nextTxIdRef.current++;
+      const isSuccess = Math.random() > 0.48;
+      const customer = SIMULATED_CUSTOMER_NAMES[Math.floor(Math.random() * SIMULATED_CUSTOMER_NAMES.length)];
+      const latency = Math.floor(Math.random() * 380) + 120;
+      const amount = Math.floor(Math.random() * 60) * 100 + 800;
 
-  // Circuit Breaker Demo Trigger
-  const handleTriggerCircuitBreaker = async (batchId: string) => {
-    try {
-      const res = await fetch(`${API_BASE}/batches/${batchId}/trigger-circuit-breaker`, {
-        method: 'POST'
-      });
-      if (res.ok) {
-        const updated: Batch = await res.json();
-        setSelectedBatch(updated);
-        setCircuitBreakerAlert(
-          `RECOVERY STOPPED — Circuit Breaker Triggered (Observed failure rate ${(updated.failure_rate * 100).toFixed(0)}% > Allowed threshold 15%). Deterministically halted.`
-        );
-        loadBatches();
+      const newEvent: StreamEvent = {
+        id: `tx-${currentTxNum}-${Date.now()}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        status: isSuccess ? 'recovered' : 'failed',
+        txId: `TX-${currentTxNum}`,
+        customerName: customer,
+        amount: isSuccess ? amount : undefined,
+        reason: !isSuccess ? SIMULATED_FAILURE_REASONS[Math.floor(Math.random() * SIMULATED_FAILURE_REASONS.length)] : undefined,
+        latencyMs: latency
+      };
+
+      setEvents(prev => [newEvent, ...prev.slice(0, 49)]); // Keep latest 50
+      setProcessedTxns(prev => Math.min(totalTxns, prev + 1));
+
+      if (isSuccess) {
+        setSuccessfulRecoveries(prev => prev + 1);
+        setRecoveredAmount(prev => prev + amount);
+      } else {
+        setFailedRecoveries(prev => prev + 1);
       }
-    } catch (err) {
-      console.error(err);
-    }
-  };
+    }, 2800);
 
-  const handleApproveBatch = () => {
-    setAuthorizing(true);
-    setTimeout(() => {
-      setAuthorizing(false);
-      setAuthSuccess(true);
-      if (selectedBatch) {
-        setSelectedBatch({
-          ...selectedBatch,
-          status: 'RUNNING'
-        });
-      }
-    }, 1000);
-  };
+    return () => clearInterval(interval);
+  }, [isStreaming, circuitBreakerTripped, processedTxns, totalTxns]);
 
-  const activeBatch = selectedBatch || (batches.length > 0 ? batches[0] : null);
+  // Derived calculations
+  const remainingTxns = Math.max(0, totalTxns - processedTxns);
+  const completionPercentage = Math.min(100, Math.round((processedTxns / totalTxns) * 100));
+  const failureRatePercent = processedTxns > 0 ? ((failedRecoveries / processedTxns) * 100).toFixed(1) : '0.0';
+  const recoveredInLakhs = (recoveredAmount / 100000).toFixed(2);
+
+  // Filter events
+  const filteredEvents = events.filter(e => {
+    if (streamFilter === 'all') return true;
+    return e.status === streamFilter || e.status === 'milestone';
+  });
 
   return (
-    <div className="max-w-7xl mx-auto pb-12 space-y-8 animate-fade-in relative z-10">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight flex items-center gap-2">
-              <Repeat className="text-purple-400" size={28} />
-              Recovery Control Operations
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/20">
-              Bounded Recovery Engine
-            </span>
-          </div>
-          <p className="text-sm text-gray-400 mt-1">
-            Automated payment link generation, batch queuing, safety policy authorization, and live circuit-breaker protection.
-          </p>
+    <div className="max-w-7xl mx-auto pb-12 space-y-6 animate-fade-in relative z-10 select-none">
+      {/* Top Warning Banner matching reference */}
+      <div className="flex items-center gap-2.5 px-4 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs">
+        <Lock size={14} className="text-amber-400 shrink-0" />
+        <p className="leading-tight">
+          <strong className="text-amber-300 font-semibold">Razorpay Test Mode Active:</strong> You are operating in a sandboxed financial environment. Simulated recovery transactions do not trigger real settlement debits.
+        </p>
+      </div>
+
+      {/* Breadcrumb & Navigation Bar matching reference */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-gray-400">ReviveX</span>
+          <span className="text-gray-600">&gt;</span>
+          <span className="text-white font-semibold">Recovery Execution Monitor</span>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="inline-flex rounded-lg bg-black/40 border border-white/10 p-1 self-start md:self-auto text-xs">
-          <button
-            onClick={() => setActiveTab('operations')}
-            className={`px-4 py-2 rounded-md font-semibold transition-all flex items-center gap-2 ${
-              activeTab === 'operations'
-                ? 'bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.4)]'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Repeat size={14} />
-            <span>Recovery Operations</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('active')}
-            className={`px-4 py-2 rounded-md font-semibold transition-all flex items-center gap-2 ${
-              activeTab === 'active'
-                ? 'bg-purple-600 text-white shadow-[0_0_12px_rgba(168,85,247,0.4)]'
-                : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Radio size={14} className="text-emerald-400 animate-pulse" />
-            <span>Active Recovery Monitor</span>
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Quick Search */}
+          <div className="relative hidden md:block">
+            <input 
+              type="text" 
+              placeholder="Search or jump to..." 
+              readOnly
+              className="bg-black/40 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-400 w-44 focus:outline-none cursor-pointer"
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-gray-400 font-mono">⌘K</span>
+          </div>
+
+          {/* Active Incident Tag */}
+          <Link href="/incidents" className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-500/15 border border-red-500/30 text-red-300 text-xs hover:bg-red-500/20 transition-colors">
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+            <span>Active Incident: UPI Degradation</span>
+            <span className="font-mono text-[10px] bg-red-500/20 px-1 rounded text-red-200">RC-001</span>
+          </Link>
+
+          {/* Test Mode Badge */}
+          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/20 text-amber-300 text-xs font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+            <span>Test Mode</span>
+          </span>
+
+          {/* Merchant Dropdown */}
+          <div className="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/5 border border-white/10 text-xs text-gray-200">
+            <Building2 size={13} className="text-purple-400" />
+            <span className="font-semibold">Acme Commerce</span>
+            <ChevronDown size={12} className="text-gray-400" />
+          </div>
         </div>
-      </header>
+      </div>
 
       {/* Circuit Breaker Alert Banner if Triggered */}
-      {circuitBreakerAlert && (
-        <div className="p-4 rounded-xl bg-red-500/15 border-2 border-red-500/40 text-red-300 flex items-start gap-3 shadow-[0_0_20px_rgba(239,68,68,0.2)]">
-          <ShieldAlert size={20} className="text-red-400 shrink-0 mt-0.5" />
+      {circuitBreakerTripped && (
+        <div className="p-4 rounded-xl bg-red-500/15 border-2 border-red-500/40 text-red-200 flex items-start gap-3 shadow-[0_0_20px_rgba(239,68,68,0.2)] animate-pulse">
+          <ShieldAlert size={22} className="text-red-400 shrink-0 mt-0.5" />
           <div className="text-xs space-y-1">
-            <span className="font-bold text-sm text-white block">DETERMINISTIC SAFETY SHUTDOWN</span>
-            <p className="font-mono text-red-200">{circuitBreakerAlert}</p>
+            <span className="font-bold text-sm text-white block">DETERMINISTIC CIRCUIT BREAKER SHUTDOWN ACTIVE</span>
+            <p className="font-mono text-red-200">
+              Execution auto-stopped: Downstream gateway failure rate reached {failureRatePercent}%, exceeding the 30% safety threshold.
+            </p>
             <p className="text-gray-300 pt-1">
-              Safety Engine immediately suspended all pending payment retries to prevent cascading failure and protect customer trust.
+              All further automated retries for Batch {batchId} have been suspended to prevent customer spam and protect merchant reputation.
             </p>
           </div>
         </div>
       )}
 
-      {/* OPERATIONS VIEW */}
-      {activeTab === 'operations' && (
-        <div className="space-y-8">
-          {/* Recovery Authorization Panel */}
-          <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-              <div>
-                <h2 className="text-base font-semibold text-white flex items-center gap-2">
-                  <ShieldCheck size={18} className="text-emerald-400" />
-                  Merchant Recovery Authorization
-                </h2>
-                <p className="text-xs text-gray-400">Deterministic pre-flight checks before recovery dispatch</p>
-              </div>
+      {/* CARD 1: REAL-TIME EXECUTION TELEMETRY */}
+      <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-5 bg-[#0f0f12]/90 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase">
+              Real-Time Execution Telemetry
+            </span>
+            <div className="flex items-center gap-2 mt-1">
+              <Activity size={18} className="text-purple-400 animate-pulse" />
+              <h2 className="text-lg font-bold text-white tracking-tight">
+                {batchId} — {processedTxns} / {totalTxns} Transactions Processed
+              </h2>
+            </div>
+          </div>
 
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-1 rounded text-xs font-semibold bg-white/5 border border-white/10 text-gray-300">
-                  Target: Razorpay Test Mode
+          <div className="text-right">
+            <span className="text-base font-bold text-white tracking-tight">
+              {completionPercentage}% Complete
+            </span>
+          </div>
+        </div>
+
+        {/* Progress Bar matching reference image with emerald glow */}
+        <div className="w-full bg-white/10 rounded-full h-2.5 overflow-hidden">
+          <div 
+            className="bg-emerald-500 h-full rounded-full transition-all duration-700 shadow-[0_0_12px_rgba(16,185,129,0.6)]"
+            style={{ width: `${completionPercentage}%` }}
+          />
+        </div>
+
+        {/* 5 KPI Metric Cards Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-2">
+          {/* 1. SUCCESSFUL */}
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+              Successful
+            </span>
+            <p className="text-2xl font-bold text-white">
+              {successfulRecoveries}
+            </p>
+            <span className="text-[11px] text-gray-400 block">
+              Recovered to merchant
+            </span>
+          </div>
+
+          {/* 2. FAILED */}
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+              Failed
+            </span>
+            <p className="text-2xl font-bold text-red-500">
+              {failedRecoveries}
+            </p>
+            <span className="text-[11px] text-gray-400 block">
+              Gateway / bank timeout
+            </span>
+          </div>
+
+          {/* 3. REMAINING */}
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+              Remaining
+            </span>
+            <p className="text-2xl font-bold text-white">
+              {remainingTxns}
+            </p>
+            <span className="text-[11px] text-gray-400 block">
+              Pending in queue
+            </span>
+          </div>
+
+          {/* 4. FAILURE RATE */}
+          <div className="p-4 rounded-xl bg-white/[0.03] border border-white/5 space-y-1">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
+              Failure Rate
+            </span>
+            <p className={`text-2xl font-bold ${Number(failureRatePercent) > 30 ? 'text-red-500' : 'text-emerald-400'}`}>
+              {failureRatePercent}%
+            </p>
+            <span className="text-[11px] text-gray-400 block">
+              Max limit 30%
+            </span>
+          </div>
+
+          {/* 5. RECOVERED ₹ (Special Highlighted Card with emerald border) */}
+          <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 space-y-1 col-span-2 sm:col-span-1 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">
+              Recovered ₹
+            </span>
+            <p className="text-2xl font-bold text-emerald-400">
+              ₹{recoveredInLakhs}L
+            </p>
+            <span className="text-[11px] text-emerald-300 block">
+              Net recovered funds
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* CARD 2: LIVE ACTIVITY STREAM */}
+      <div className="glass-panel rounded-xl border border-white/10 overflow-hidden bg-[#0c0c0e]/90 shadow-xl">
+        {/* Stream Header */}
+        <div className="p-5 border-b border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <span className="text-purple-400 font-mono text-base font-bold">&gt;_</span>
+              <span>Live Activity Stream</span>
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Individual transaction retry dispatch events, latency benchmarks, and idempotency status.
+            </p>
+          </div>
+
+          {/* Stream Interactive Controls */}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            {/* Live Indicator */}
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-gray-300">
+              <span className={`w-2 h-2 rounded-full ${isStreaming ? 'bg-emerald-400 animate-ping' : 'bg-gray-500'}`}></span>
+              <span className="text-[11px] font-medium">{isStreaming ? 'Streaming Active' : 'Paused'}</span>
+            </div>
+
+            {/* Filter Buttons */}
+            <div className="inline-flex rounded-lg bg-black/40 border border-white/10 p-0.5 text-[11px]">
+              <button
+                onClick={() => setStreamFilter('all')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                  streamFilter === 'all' ? 'bg-purple-600 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                All Events
+              </button>
+              <button
+                onClick={() => setStreamFilter('recovered')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                  streamFilter === 'recovered' ? 'bg-emerald-600 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Recovered
+              </button>
+              <button
+                onClick={() => setStreamFilter('failed')}
+                className={`px-2.5 py-1 rounded-md font-medium transition-colors ${
+                  streamFilter === 'failed' ? 'bg-red-600 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Failed
+              </button>
+            </div>
+
+            {/* Action Buttons */}
+            <button
+              onClick={() => setIsStreaming(!isStreaming)}
+              disabled={circuitBreakerTripped}
+              className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 font-medium text-xs transition-colors flex items-center gap-1 disabled:opacity-40"
+            >
+              {isStreaming ? <Pause size={12} /> : <Play size={12} />}
+              <span>{isStreaming ? 'Pause' : 'Resume'}</span>
+            </button>
+
+            <button
+              onClick={handleFastForward}
+              disabled={processedTxns >= totalTxns || circuitBreakerTripped}
+              className="px-2.5 py-1 rounded-lg bg-purple-600 hover:bg-purple-500 text-white font-medium text-xs transition-colors flex items-center gap-1 shadow-[0_0_10px_rgba(168,85,247,0.3)] disabled:opacity-40"
+            >
+              <Zap size={12} />
+              <span>Fast-forward Batch</span>
+            </button>
+
+            <button
+              onClick={handleTriggerCircuitBreaker}
+              disabled={circuitBreakerTripped}
+              className="px-2.5 py-1 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 border border-red-500/30 font-medium text-xs transition-colors flex items-center gap-1 disabled:opacity-40"
+            >
+              <ShieldAlert size={12} />
+              <span>Trigger Auto-Stop</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Stream Items List matching exact format of screenshot */}
+        <div className="divide-y divide-white/[0.04] max-h-[520px] overflow-y-auto font-mono text-xs scrollbar-thin scrollbar-thumb-white/10">
+          {filteredEvents.map((evt) => {
+            if (evt.status === 'milestone') {
+              return (
+                <div 
+                  key={evt.id}
+                  className="px-5 py-3 flex items-center justify-between bg-purple-500/[0.08] hover:bg-purple-500/[0.12] transition-colors border-l-2 border-purple-500"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-400 text-[11px] whitespace-nowrap">{evt.timestamp}</span>
+                    <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                    <span className="text-purple-200 text-xs font-semibold">
+                      {evt.customMessage}
+                    </span>
+                  </div>
+                  <span className="text-gray-400 text-[11px] font-mono shrink-0 ml-4">
+                    {evt.latencyMs}ms
+                  </span>
+                </div>
+              );
+            }
+
+            if (evt.status === 'recovered') {
+              return (
+                <div 
+                  key={evt.id}
+                  className="px-5 py-2.5 flex items-center justify-between bg-emerald-500/[0.03] hover:bg-emerald-500/[0.07] transition-colors"
+                >
+                  <div className="flex items-center gap-3 truncate">
+                    <span className="text-gray-400 text-[11px] whitespace-nowrap">{evt.timestamp}</span>
+                    <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                    <span className="text-emerald-300 text-xs truncate">
+                      Transaction <strong className="font-semibold text-white">{evt.txId}</strong> ({evt.customerName}) recovered: <span className="font-bold text-emerald-400">₹{evt.amount?.toLocaleString('en-IN')}</span>
+                    </span>
+                  </div>
+                  <span className="text-gray-400 text-[11px] font-mono shrink-0 ml-4">
+                    {evt.latencyMs}ms
+                  </span>
+                </div>
+              );
+            }
+
+            // Failed Event
+            return (
+              <div 
+                key={evt.id}
+                className="px-5 py-2.5 flex items-center justify-between bg-red-500/[0.03] hover:bg-red-500/[0.07] transition-colors"
+              >
+                <div className="flex items-center gap-3 truncate">
+                  <span className="text-gray-400 text-[11px] whitespace-nowrap">{evt.timestamp}</span>
+                  <XCircle size={14} className="text-red-400 shrink-0" />
+                  <span className="text-red-300 text-xs truncate">
+                    Transaction <strong className="font-semibold text-white">{evt.txId}</strong> ({evt.customerName}) failed: <span className="text-red-400">{evt.reason || 'Bank timeout'}</span>
+                  </span>
+                </div>
+                <span className="text-gray-400 text-[11px] font-mono shrink-0 ml-4">
+                  {evt.latencyMs}ms
                 </span>
               </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-              <div className="p-4 rounded-lg bg-white/5 border border-white/5 space-y-1">
-                <span className="text-gray-400">Action Type</span>
-                <p className="font-semibold text-white text-sm">Payment Link (SMS/Email Nudge)</p>
-                <span className="text-[11px] text-purple-300">Non-intrusive recovery</span>
-              </div>
-
-              <div className="p-4 rounded-lg bg-white/5 border border-white/5 space-y-1">
-                <span className="text-gray-400">Eligible Transactions</span>
-                <p className="font-semibold text-white text-sm">18 Failed Checkouts</p>
-                <span className="text-[11px] text-emerald-400">100% transient root causes</span>
-              </div>
-
-              <div className="p-4 rounded-lg bg-white/5 border border-white/5 space-y-1">
-                <span className="text-gray-400">Max Exposure Cap</span>
-                <p className="font-semibold text-amber-300 text-sm">₹50,000 Cap</p>
-                <span className="text-[11px] text-amber-400">Active Exposure: ₹34,500</span>
-              </div>
-
-              <div className="p-4 rounded-lg bg-white/5 border border-white/5 space-y-1">
-                <span className="text-gray-400">Circuit Breaker Policy</span>
-                <p className="font-semibold text-red-400 text-sm">Auto-Stop at 15% Failure</p>
-                <span className="text-[11px] text-gray-400">Deterministic tripping rule</span>
-              </div>
-            </div>
-
-            {/* Safety Verification Checklist */}
-            <div className="p-4 rounded-lg bg-black/40 border border-white/5 space-y-2 text-xs">
-              <span className="text-xs font-semibold text-gray-300 block mb-2">Pre-Execution Safety Verification</span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="flex items-center gap-2 text-emerald-400 font-medium">
-                  <CheckCircle2 size={15} />
-                  <span>Idempotency Key Locked</span>
-                </div>
-                <div className="flex items-center gap-2 text-emerald-400 font-medium">
-                  <CheckCircle2 size={15} />
-                  <span>Webhook Signature Verified</span>
-                </div>
-                <div className="flex items-center gap-2 text-emerald-400 font-medium">
-                  <CheckCircle2 size={15} />
-                  <span>Settlement Protection Active</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-xs text-gray-400">
-                Authorized by: <strong className="text-gray-200">Admin User (Risk Operations)</strong>
-              </span>
-
-              <button
-                onClick={handleApproveBatch}
-                disabled={authorizing || authSuccess}
-                className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-all flex items-center gap-2 disabled:opacity-50"
-              >
-                <Play size={13} className={authorizing ? 'animate-spin' : ''} />
-                <span>{authSuccess ? 'Recovery Dispatched' : authorizing ? 'Authorizing...' : 'Approve & Start Recovery'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Batches Table */}
-          <div className="glass-panel rounded-xl border border-white/10 overflow-hidden">
-            <div className="p-5 border-b border-white/10 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-semibold text-white">Recovery Batches</h3>
-                <p className="text-xs text-gray-400">Batched execution queues with real-time health telemetry</p>
-              </div>
-              <button 
-                onClick={loadBatches}
-                aria-label="Refresh batches list"
-                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300"
-              >
-                <RefreshCw size={13} />
-              </button>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-gray-400">
-                <thead className="bg-black/30 text-[11px] uppercase font-semibold text-gray-300 border-b border-white/5">
-                  <tr>
-                    <th className="px-5 py-3.5">Batch ID / Name</th>
-                    <th className="px-5 py-3.5">Status</th>
-                    <th className="px-5 py-3.5">Transactions (Processed / Total)</th>
-                    <th className="px-5 py-3.5">Failure Rate</th>
-                    <th className="px-5 py-3.5">Recovered Amount</th>
-                    <th className="px-5 py-3.5 text-right">Circuit Breaker Demo</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {batches.map((b) => (
-                    <tr 
-                      key={b.id} 
-                      onClick={() => setSelectedBatch(b)}
-                      className="hover:bg-white/[0.03] transition-colors cursor-pointer"
-                    >
-                      <td className="px-5 py-3.5">
-                        <div className="font-semibold text-white">{b.name}</div>
-                        <div className="font-mono text-[10px] text-gray-400">{b.id}</div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold uppercase ${
-                          b.status === 'RUNNING' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' :
-                          b.status === 'STOPPED' ? 'bg-red-500/15 text-red-400 border border-red-500/30' :
-                          b.status === 'COMPLETED' ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30' :
-                          'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                        }`}>
-                          {b.status}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <div className="text-gray-200 font-medium">
-                          {b.processed_transactions} / {b.total_transactions}
-                        </div>
-                        <div className="w-28 bg-white/10 rounded-full h-1.5 mt-1 overflow-hidden">
-                          <div 
-                            className="bg-purple-500 h-full rounded-full" 
-                            style={{ width: `${(b.processed_transactions / (b.total_transactions || 1)) * 100}%` }}
-                          />
-                        </div>
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <span className={`font-semibold ${b.failure_rate > 0.15 ? 'text-red-400' : 'text-gray-300'}`}>
-                          {(b.failure_rate * 100).toFixed(0)}%
-                        </span>
-                        <span className="text-[10px] text-gray-400 ml-1">/ 15% max</span>
-                      </td>
-                      <td className="px-5 py-3.5 font-bold text-emerald-400">
-                        ₹{(b.recovered_amount ?? 0).toLocaleString()}
-                      </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTriggerCircuitBreaker(b.id);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 text-xs font-semibold border border-red-500/30 transition-all flex items-center gap-1.5 ml-auto"
-                        >
-                          <Zap size={12} className="text-red-400" />
-                          <span>Trigger Auto-Stop Demo</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      )}
 
-      {/* ACTIVE RECOVERY MONITOR VIEW */}
-      {activeTab === 'active' && activeBatch && (
-        <div className="space-y-6">
-          {/* Live Execution Monitor Dashboard */}
-          <div className="glass-panel p-6 rounded-xl border border-white/10 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-                  <h2 className="text-base font-semibold text-white">Live Execution Monitor: {activeBatch.name}</h2>
-                </div>
-                <p className="text-xs text-gray-400 font-mono mt-0.5">Batch ID: {activeBatch.id}</p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => handleTriggerCircuitBreaker(activeBatch.id)}
-                  className="px-3.5 py-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 text-red-300 text-xs font-semibold border border-red-500/30 transition-colors flex items-center gap-1.5"
-                >
-                  <Zap size={13} className="text-red-400" />
-                  <span>Simulate 70% Spurt (Trip Circuit Breaker)</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Metrics */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="p-4 rounded-lg bg-white/5 border border-white/5 space-y-1">
-                <span className="text-xs text-gray-400">Transactions Processed</span>
-                <p className="text-2xl font-bold text-white">
-                  {activeBatch.processed_transactions} / {activeBatch.total_transactions}
-                </p>
-                <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden mt-2">
-                  <div 
-                    className="bg-purple-500 h-full rounded-full transition-all duration-500" 
-                    style={{ width: `${(activeBatch.processed_transactions / (activeBatch.total_transactions || 1)) * 100}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="p-4 rounded-lg bg-white/5 border border-white/5 space-y-1">
-                <span className="text-xs text-gray-400">Current Failure Rate</span>
-                <p className={`text-2xl font-bold ${activeBatch.failure_rate > 0.15 ? 'text-red-400' : 'text-emerald-400'}`}>
-                  {(activeBatch.failure_rate * 100).toFixed(0)}%
-                </p>
-                <span className="text-[11px] text-gray-400">Threshold: 15.0% auto-stop</span>
-              </div>
-
-              <div className="p-4 rounded-lg bg-white/5 border border-white/5 space-y-1">
-                <span className="text-xs text-gray-400">Revenue Recovered</span>
-                <p className="text-2xl font-bold text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]">
-                  ₹{(activeBatch.recovered_amount ?? 0).toLocaleString()}
-                </p>
-                <span className="text-[11px] text-emerald-400">Webhook verified</span>
-              </div>
-
-              <div className="p-4 rounded-lg bg-white/5 border border-white/5 space-y-1">
-                <span className="text-xs text-gray-400">Execution Latency</span>
-                <p className="text-2xl font-bold text-white">320ms</p>
-                <span className="text-[11px] text-purple-300">Razorpay API rate nominal</span>
-              </div>
-            </div>
-
-            {/* Live Activity Stream */}
-            <div className="space-y-3 pt-2">
-              <h3 className="text-xs font-semibold text-white flex items-center gap-2">
-                <Activity size={14} className="text-purple-400" />
-                Live Event Stream
-              </h3>
-
-              <div className="space-y-2 font-mono text-[11px]">
-                <div className="p-2.5 rounded bg-white/5 border border-white/5 flex items-center justify-between text-gray-300">
-                  <span className="text-emerald-400 flex items-center gap-2">
-                    <CheckCircle2 size={13} />
-                    [WEBHOOK_RECEIVED] Razorpay event payment_link.paid validated for txn_rec_91823.
-                  </span>
-                  <span className="text-gray-400">14:24:02 IST</span>
-                </div>
-                <div className="p-2.5 rounded bg-white/5 border border-white/5 flex items-center justify-between text-gray-300">
-                  <span className="text-purple-300 flex items-center gap-2">
-                    <Repeat size={13} />
-                    [RETRY_DISPATCHED] Created test-mode Payment Link plink_revivex_test_482.
-                  </span>
-                  <span className="text-gray-400">14:23:48 IST</span>
-                </div>
-                {activeBatch.status === 'STOPPED' && (
-                  <div className="p-2.5 rounded bg-red-500/15 border border-red-500/30 flex items-center justify-between text-red-300">
-                    <span className="flex items-center gap-2 font-bold">
-                      <ShieldAlert size={13} />
-                      [CIRCUIT_BREAKER_TRIGGERED] Recovery Engine paused remaining 10 transactions. Failure rate exceeded 15%.
-                    </span>
-                    <span className="text-red-400 font-bold">NOW</span>
-                  </div>
-                )}
-              </div>
-            </div>
+        {/* Bottom Stream Footer */}
+        <div className="p-3 border-t border-white/10 bg-black/40 flex items-center justify-between text-[11px] text-gray-400 px-5">
+          <div className="flex items-center gap-2">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            <span>Connected to Razorpay Test Gateway Telemetry Socket</span>
           </div>
+          <span>Showing {filteredEvents.length} transactions</span>
         </div>
-      )}
+      </div>
     </div>
   );
 }
 
 export default function RecoveryPage() {
   return (
-    <Suspense fallback={<div className="text-gray-400 p-8">Loading recovery operations...</div>}>
+    <Suspense fallback={<div className="text-gray-400 p-8">Loading recovery execution monitor...</div>}>
       <RecoveryContent />
     </Suspense>
   );

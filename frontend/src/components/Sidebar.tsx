@@ -69,8 +69,8 @@ export function Sidebar() {
         <div>
           <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Recovery</p>
           <div className="space-y-0.5">
-            <NavItem href="/recovery" icon={<Repeat size={16} />} label="Recovery Operations" active={isActive('/recovery') || isActive('/batches') || isActive('/authorizations')} />
-            <NavItem href="/recovery?tab=active" icon={<Radio size={16} className="text-emerald-400 animate-pulse" />} label="Active Recovery" active={pathname === '/recovery' && typeof window !== 'undefined' && window.location.search.includes('tab=active')} />
+            <NavItem href="/recovery" icon={<Repeat size={16} />} label="Recovery Batches" active={pathname === '/recovery'} />
+            <NavItem href="/recovery?tab=active" icon={<Radio size={16} className="text-emerald-400 animate-pulse" />} label="Active Recovery" badge="Live" active={pathname === '/recovery'} />
           </div>
         </div>
 
@@ -101,7 +101,7 @@ export function Sidebar() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5 text-gray-300 font-medium">
               <Building2 size={13} className="text-gray-400" />
-              <span>Acme Corp</span>
+              <span>Acme Commerce</span>
             </div>
             <span className="flex items-center gap-1 text-[10px] font-medium text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.2 rounded">
               <Lock size={9} /> TEST MODE
@@ -119,11 +119,11 @@ export function Sidebar() {
         {/* Operator Profile */}
         <div className="flex items-center gap-2.5 px-2 py-1.5">
           <div className="w-7 h-7 rounded-md bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-white text-xs font-semibold">
-            RX
+            AS
           </div>
           <div className="overflow-hidden">
-            <p className="text-xs font-medium text-gray-200 truncate">Risk Operations</p>
-            <p className="text-[10px] text-gray-400 truncate">admin@revivex.io</p>
+            <p className="text-xs font-medium text-gray-200 truncate">Acme Commerce</p>
+            <p className="text-[10px] text-gray-400 truncate">ops@acme.com</p>
           </div>
         </div>
       </div>
@@ -131,18 +131,25 @@ export function Sidebar() {
   );
 }
 
-function NavItem({ href, icon, label, active }: { href: string; icon: React.ReactNode; label: string; active: boolean }) {
+function NavItem({ href, icon, label, active, badge }: { href: string; icon: React.ReactNode; label: string; active: boolean; badge?: string }) {
   return (
     <Link 
       href={href} 
-      className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-xs font-medium ${
+      className={`flex items-center justify-between px-3 py-2 rounded-lg transition-all text-xs font-medium ${
         active 
           ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_12px_rgba(168,85,247,0.15)] font-semibold' 
           : 'text-gray-400 hover:text-gray-200 hover:bg-white/5 border border-transparent'
       }`}
     >
-      <span className={active ? 'text-purple-400' : 'text-gray-400'}>{icon}</span>
-      <span>{label}</span>
+      <div className="flex items-center gap-3">
+        <span className={active ? 'text-purple-400' : 'text-gray-400'}>{icon}</span>
+        <span>{label}</span>
+      </div>
+      {badge && (
+        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-600 text-white shadow-[0_0_8px_rgba(168,85,247,0.5)]">
+          {badge}
+        </span>
+      )}
     </Link>
   );
 }
