@@ -92,7 +92,7 @@ class SettingsResponse(SettingsUpdate):
 class ExceptionActionRequest(BaseModel):
     action: str # "retry", "resolve", "ignore"
 
-class SystemExceptionResponse(BaseModel):
+class IncidentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
     merchant_id: Optional[str] = None
@@ -133,3 +133,19 @@ class SimulatorResult(BaseModel):
     final_action: str
     traces: List[StageTrace]
     audit_trail: List[Dict[str, Any]]
+
+class RecoveryBatchResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    status: str
+    total_cases: float
+    successful_cases: float
+    failed_cases: float
+    created_at: datetime
+    executed_at: Optional[datetime] = None
+    executed_by: Optional[str] = None
+
+class AIAssistantChatRequest(BaseModel):
+    message: str
+    context: Optional[Dict[str, Any]] = None
+

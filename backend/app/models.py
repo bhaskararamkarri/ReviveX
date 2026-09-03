@@ -14,7 +14,7 @@ class Merchant(Base):
     email = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
     transactions = relationship("Transaction", back_populates="merchant")
-    rules = relationship("AgentRule", back_populates="merchant")
+    policies = relationship("SafetyPolicy", back_populates="merchant")
 
 class WebhookEvent(Base):
     __tablename__ = "webhook_events"
@@ -47,22 +47,25 @@ class RecoveryCase(Base):
     __tablename__ = "recovery_cases"
     id = Column(String, primary_key=True, default=generate_uuid)
     transaction_id = Column(String, ForeignKey("transactions.id"), index=True)
-    status = Column(String, default="open", index=True) # open, recovered, failed, pending_human_review
+    status = Column(String, default="open", index=True) # open, recovered, failed, pending_human_review, pending_batch
     risk_type = Column(String, nullable=True) # failed_payment, checkout_abandonment, repeated_failure
+    risk_severity = Column(String, nullable=True) # LOW, MEDIUM, HIGH, CRITICAL
     risk_amount = Column(Numeric(10, 2), nullable=True)
     signals = Column(JSON, nullable=True)
     diagnosed_root_cause = Column(String, nullable=True)
     confidence_score = Column(Numeric(4, 3), nullable=True)
     recommended_action = Column(String, nullable=True)
     final_action = Column(String, nullable=True)
+    ai_trace_id = Column(String, nullable=True) # For AI investigation trace
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     transaction = relationship("Transaction", back_populates="recovery_case")
     actions = relationship("RecoveryAction", back_populates="case")
     audit_logs = relationship("AuditLog", back_populates="case")
+    authorizations = relationship("AuthorizationRecord", back_populates="case")
 
     __table_args__ = (
-        CheckConstraint("status IN ('open', 'recovered', 'failed', 'pending_human_review')", name="valid_case_status"),
+        CheckConstraint("status IN ('open', 'recovered', 'failed', 'pending_human_review', 'pending_batch')", name="valid_case_status"),
     )
 
 class RecoveryAction(Base):
@@ -80,28 +83,30 @@ class AuditLog(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     recovery_case_id = Column(String, ForeignKey("recovery_cases.id"), index=True)
     transaction_id = Column(String, ForeignKey("transactions.id"), index=True)
-    event = Column(String) # DETECTED, DIAGNOSED, DECIDED, ACTION_EXECUTED, OUTCOME_RECORDED
+    event = Column(String) # DETECTED, DIAGNOSED, DECIDED, ACTION_EXECUTED, OUTCOME_RECORDED, AUTHORIZED, INCIDENT_LOGGED
     actor = Column(String) # LLM, SYSTEM, HUMAN
     details = Column(JSON, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     case = relationship("RecoveryCase", back_populates="audit_logs")
     transaction = relationship("Transaction")
 
-class AgentRule(Base):
-    __tablename__ = "agent_rules"
+class SafetyPolicy(Base):
+    __tablename__ = "safety_policies"
     id = Column(String, primary_key=True, default=generate_uuid)
     merchant_id = Column(String, ForeignKey("merchants.id"), index=True)
     rule_type = Column(String) # MAX_RETRIES, HUMAN_APPROVAL_THRESHOLD, MAX_DISCOUNT_PERCENT, FRAUD_FLAG
     rule_value = Column(JSON)
-    merchant = relationship("Merchant", back_populates="rules")
+    description = Column(String, nullable=True)
+    is_active = Column(String, default="true")
+    merchant = relationship("Merchant", back_populates="policies")
 
-class SystemException(Base):
-    __tablename__ = "exceptions"
+class Incident(Base):
+    __tablename__ = "incidents"
     id = Column(String, primary_key=True, default=generate_uuid)
     merchant_id = Column(String, ForeignKey("merchants.id"), index=True, nullable=True)
     transaction_id = Column(String, ForeignKey("transactions.id"), index=True, nullable=True)
     recovery_case_id = Column(String, ForeignKey("recovery_cases.id"), index=True, nullable=True)
-    type = Column(String, index=True) # AI_ERROR, WEBHOOK_ERROR, RECOVERY_ERROR, DATABASE_ERROR, SYSTEM_ERROR, RATE_LIMIT, AI_VALIDATION_ERROR
+    type = Column(String, index=True) # AI_ERROR, WEBHOOK_ERROR, RECOVERY_ERROR, DATABASE_ERROR, SYSTEM_ERROR, RATE_LIMIT, AI_VALIDATION_ERROR, POLICY_VIOLATION
     severity = Column(String, index=True) # CRITICAL, ERROR, WARNING, INFO
     status = Column(String, default="OPEN", index=True) # OPEN, IN_PROGRESS, RESOLVED, IGNORED
     message = Column(String)
@@ -110,3 +115,26 @@ class SystemException(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     resolved_at = Column(DateTime, nullable=True)
     resolved_by = Column(String, nullable=True)
+
+class AuthorizationRecord(Base):
+    __tablename__ = "authorization_records"
+    id = Column(String, primary_key=True, default=generate_uuid)
+    recovery_case_id = Column(String, ForeignKey("recovery_cases.id"), index=True)
+    status = Column(String, default="PENDING", index=True) # PENDING, APPROVED, REJECTED
+    requested_action = Column(String)
+    reason = Column(String, nullable=True)
+    authorized_by = Column(String, nullable=True) # User ID or email
+    authorized_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    case = relationship("RecoveryCase", back_populates="authorizations")
+
+class RecoveryBatch(Base):
+    __tablename__ = "recovery_batches"
+    id = Column(String, primary_key=True, default=generate_uuid)
+    status = Column(String, default="PENDING", index=True) # PENDING, PROCESSING, COMPLETED, FAILED
+    total_cases = Column(Numeric, default=0)
+    successful_cases = Column(Numeric, default=0)
+    failed_cases = Column(Numeric, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    executed_at = Column(DateTime, nullable=True)
+    executed_by = Column(String, nullable=True)

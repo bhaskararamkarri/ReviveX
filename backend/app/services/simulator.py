@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import inspect
 
-from app.models import Transaction, RecoveryCase, RecoveryAction, AuditLog, WebhookEvent, AgentRule
+from app.models import Transaction, RecoveryCase, RecoveryAction, AuditLog, WebhookEvent, SafetyPolicy
 from app.schemas import SimulatorPayload, SimulatorResult, StageTrace, RootCauseEnum, RecommendedActionEnum
 from app.services.razorpay import RazorpayWebhookService
 from app.services.detection import DetectionEngine
@@ -19,7 +19,7 @@ from app.database import engine, Base
 
 class SimulationSession:
     """
-    A wrapper around sqlalchemy Session that delegates queries to the real database (so we can fetch AgentRules)
+    A wrapper around sqlalchemy Session that delegates queries to the real database (so we can fetch SafetyPolicys)
     but intercepts add, commit, flush, and refresh to prevent mutating the real database.
     It records simulated operations for the UI.
     """
@@ -29,7 +29,7 @@ class SimulationSession:
         self.db_operations = []
         
     def query(self, *args, **kwargs):
-        # Allow querying the real database (e.g. for AgentRules)
+        # Allow querying the real database (e.g. for SafetyPolicys)
         return self.real_db.query(*args, **kwargs)
         
     def add(self, obj):
@@ -247,7 +247,7 @@ class SimulationEngine:
         # --- STAGE 07 & 08: GUARDRAILS & DECISION ---
         start_time = time.time()
         
-        rules = real_db.query(AgentRule).all() # Load real rules
+        rules = real_db.query(SafetyPolicy).all() # Load real rules
         decision = DecisionEngine.evaluate(case, transaction, diagnosis, rules)
         
         final_action_val = decision.decision.value if hasattr(decision.decision, 'value') else decision.decision

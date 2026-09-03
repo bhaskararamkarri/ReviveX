@@ -4,7 +4,7 @@ import logging
 from unittest.mock import patch
 from sqlalchemy.orm import Session
 from app.database import engine, Base, SessionLocal
-from app.models import Merchant, Transaction, RecoveryCase, AgentRule
+from app.models import Merchant, Transaction, RecoveryCase, SafetyPolicy
 from app.services.detection import DetectionEngine
 from app.services.orchestrator import WorkflowOrchestrator
 from app.schemas import AIDiagnosisResponse, RootCauseEnum, RecommendedActionEnum
@@ -28,7 +28,7 @@ def generate_synthetic_data(db: Session, num_transactions: int = 500):
         db.refresh(merchant)
         
         # Add basic rules
-        rule = AgentRule(
+        rule = SafetyPolicy(
             merchant_id=merchant.id,
             rule_type="MAX_RETRIES",
             rule_value={"max_retries": 3}

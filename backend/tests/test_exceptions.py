@@ -9,7 +9,7 @@ client = TestClient(app)
 def test_exceptions_api():
     # Insert a dummy exception
     db = SessionLocal()
-    exc = models.SystemException(
+    exc = models.Incident(
         type="AI_ERROR",
         severity="CRITICAL",
         status="OPEN",

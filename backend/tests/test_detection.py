@@ -10,6 +10,17 @@ def db():
     # We will just yield the session and clean up the test merchant at the end.
     session = SessionLocal()
     
+    # Clean up any leftover merchant from previous failed test runs
+    existing = session.query(Merchant).filter(Merchant.name == "Test Detection Merchant").all()
+    for m in existing:
+        txs = session.query(Transaction).filter(Transaction.merchant_id == m.id).all()
+        tx_ids = [tx.id for tx in txs]
+        if tx_ids:
+            session.query(RecoveryCase).filter(RecoveryCase.transaction_id.in_(tx_ids)).delete(synchronize_session=False)
+            session.query(Transaction).filter(Transaction.merchant_id == m.id).delete(synchronize_session=False)
+        session.delete(m)
+    session.commit()
+    
     # Create test merchant
     merchant = Merchant(name="Test Detection Merchant", email="test@detection.com")
     session.add(merchant)

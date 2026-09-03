@@ -1,5 +1,5 @@
 from app.schemas import AgentDiagnosis
-from app.models import Transaction, AgentRule, Merchant
+from app.models import Transaction, SafetyPolicy, Merchant
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -7,7 +7,7 @@ class GuardrailService:
     @staticmethod
     def evaluate(db: Session, transaction: Transaction, diagnosis: AgentDiagnosis) -> str:
         # 1. Fetch Merchant Rules
-        rules: List[AgentRule] = db.query(AgentRule).filter(AgentRule.merchant_id == transaction.merchant_id).all()
+        rules: List[SafetyPolicy] = db.query(SafetyPolicy).filter(SafetyPolicy.merchant_id == transaction.merchant_id).all()
         rules_map = {r.rule_type: r.rule_value for r in rules}
         
         # Default fallback

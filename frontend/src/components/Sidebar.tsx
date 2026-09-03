@@ -1,55 +1,149 @@
+"use client";
+
 import Link from 'next/link';
 import Image from 'next/image';
-import { LayoutDashboard, Users, AlertCircle, Settings } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { 
+  LayoutDashboard, 
+  BrainCircuit, 
+  ShieldAlert, 
+  Activity, 
+  Settings, 
+  AlertTriangle, 
+  Zap,
+  Repeat,
+  FileText,
+  Bot,
+  Radio,
+  Building2,
+  Lock
+} from 'lucide-react';
 
 export function Sidebar() {
+  const pathname = usePathname();
+  
+  const isActive = (path: string) => {
+    if (path === '/overview') return pathname === '/overview' || pathname === '/';
+    return pathname.startsWith(path);
+  };
+
   return (
-    <aside className="w-64 h-screen border-r border-white/10 bg-[#0a0a0a]/50 backdrop-blur-xl flex flex-col relative z-10">
-      <div className="p-6">
-        <div className="flex items-center gap-2">
-          <Image 
-            src="/logo.png" 
-            alt="ReviveX Logo" 
-            width={32} 
-            height={32} 
-            className="rounded-lg object-contain drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]" 
-          />
-          <span className="font-semibold text-xl tracking-tight text-white glow-text">ReviveX</span>
-        </div>
+    <aside className="w-64 h-screen border-r border-white/10 bg-[#0a0a0a]/90 backdrop-blur-xl flex flex-col relative z-20 shrink-0 select-none">
+      {/* Brand */}
+      <div className="p-5 border-b border-white/10">
+        <Link href="/overview" className="flex items-center gap-3 group">
+          <div className="relative">
+            <Image 
+              src="/logo.png" 
+              alt="ReviveX Logo" 
+              width={34} 
+              height={34} 
+              className="rounded-lg object-contain drop-shadow-[0_0_10px_rgba(168,85,247,0.4)]" 
+              priority
+            />
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-bold text-lg tracking-tight text-white group-hover:text-purple-300 transition-colors">ReviveX</span>
+              <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded">ENT</span>
+            </div>
+            <p className="text-[11px] text-gray-400 font-normal leading-tight">Revenue Recovery Infra</p>
+          </div>
+        </Link>
       </div>
       
-      <nav className="flex-1 px-4 space-y-2 mt-6">
-        <Link href="/" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-gray-400 hover:text-white transition-all">
-          <LayoutDashboard size={20} />
-          <span className="font-medium">Dashboard</span>
-        </Link>
-        <Link href="/human-approval" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-gray-400 hover:text-white transition-all">
-          <Users size={20} />
-          <span className="font-medium">Human Queue</span>
-        </Link>
-        <Link href="/exceptions" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-gray-400 hover:text-white transition-all">
-          <AlertCircle size={20} />
-          <span className="font-medium">Exceptions</span>
-        </Link>
-        <Link href="/developer-console" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-gray-400 hover:text-white transition-all">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-          <span className="font-medium">Simulator</span>
-        </Link>
-        <Link href="/settings" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 text-gray-400 hover:text-white transition-all">
-          <Settings size={20} />
-          <span className="font-medium">Settings</span>
-        </Link>
-      </nav>
-      
-      <div className="p-6 border-t border-white/10">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500"></div>
-          <div>
-            <p className="text-sm font-medium text-white">Razorpay Admin</p>
-            <p className="text-xs text-gray-400">admin@razorpay.com</p>
+      {/* Navigation Groups */}
+      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-5 scrollbar-thin scrollbar-thumb-white/10">
+        {/* REVENUE INTELLIGENCE */}
+        <div>
+          <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Revenue Intelligence</p>
+          <div className="space-y-0.5">
+            <NavItem href="/overview" icon={<LayoutDashboard size={16} />} label="Overview" active={isActive('/overview')} />
+            <NavItem href="/incidents" icon={<AlertTriangle size={16} />} label="Incidents" active={isActive('/incidents')} />
+            <NavItem href="/risk-cases" icon={<ShieldAlert size={16} />} label="Risk Cases" active={isActive('/risk-cases') || isActive('/cases')} />
+            <NavItem href="/investigations" icon={<BrainCircuit size={16} />} label="Investigations" active={isActive('/investigations') || isActive('/investigation')} />
+          </div>
+        </div>
+
+        {/* RECOVERY */}
+        <div>
+          <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Recovery</p>
+          <div className="space-y-0.5">
+            <NavItem href="/recovery" icon={<Repeat size={16} />} label="Recovery Operations" active={isActive('/recovery') || isActive('/batches') || isActive('/authorizations')} />
+            <NavItem href="/recovery?tab=active" icon={<Radio size={16} className="text-emerald-400 animate-pulse" />} label="Active Recovery" active={pathname === '/recovery' && typeof window !== 'undefined' && window.location.search.includes('tab=active')} />
+          </div>
+        </div>
+
+        {/* OPERATIONS */}
+        <div>
+          <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Operations</p>
+          <div className="space-y-0.5">
+            <NavItem href="/transactions" icon={<FileText size={16} />} label="Transactions" active={isActive('/transactions')} />
+            <NavItem href="/audit" icon={<Activity size={16} />} label="Audit Trail" active={isActive('/audit')} />
+          </div>
+        </div>
+
+        {/* CONTROL */}
+        <div>
+          <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Control & Intelligence</p>
+          <div className="space-y-0.5">
+            <NavItem href="/policies" icon={<Settings size={16} />} label="Safety Policies" active={isActive('/policies')} />
+            <NavItem href="/ai-assistant" icon={<Bot size={16} className="text-purple-400" />} label="AI Assistant" active={isActive('/ai-assistant')} />
+            <NavItem href="/developer-console" icon={<Zap size={16} />} label="Developer Console" active={isActive('/developer-console')} />
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom Section */}
+      <div className="p-3 border-t border-white/10 bg-black/40 space-y-2 text-xs">
+        {/* Merchant & Gateway Status */}
+        <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5 space-y-1.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-gray-300 font-medium">
+              <Building2 size={13} className="text-gray-400" />
+              <span>Acme Corp</span>
+            </div>
+            <span className="flex items-center gap-1 text-[10px] font-medium text-amber-400 bg-amber-400/10 border border-amber-400/20 px-1.5 py-0.2 rounded">
+              <Lock size={9} /> TEST MODE
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-[11px] text-gray-400">
+            <span>Gateway</span>
+            <span className="flex items-center gap-1 text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_#34d399]"></span>
+              Razorpay Test
+            </span>
+          </div>
+        </div>
+
+        {/* Operator Profile */}
+        <div className="flex items-center gap-2.5 px-2 py-1.5">
+          <div className="w-7 h-7 rounded-md bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-white text-xs font-semibold">
+            RX
+          </div>
+          <div className="overflow-hidden">
+            <p className="text-xs font-medium text-gray-200 truncate">Risk Operations</p>
+            <p className="text-[10px] text-gray-400 truncate">admin@revivex.io</p>
           </div>
         </div>
       </div>
     </aside>
   );
 }
+
+function NavItem({ href, icon, label, active }: { href: string; icon: React.ReactNode; label: string; active: boolean }) {
+  return (
+    <Link 
+      href={href} 
+      className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all text-xs font-medium ${
+        active 
+          ? 'bg-purple-500/15 text-purple-300 border border-purple-500/30 shadow-[0_0_12px_rgba(168,85,247,0.15)] font-semibold' 
+          : 'text-gray-400 hover:text-gray-200 hover:bg-white/5 border border-transparent'
+      }`}
+    >
+      <span className={active ? 'text-purple-400' : 'text-gray-400'}>{icon}</span>
+      <span>{label}</span>
+    </Link>
+  );
+}
+

@@ -1,5 +1,5 @@
 import pytest
-from app.models import RecoveryCase, Transaction, AgentRule
+from app.models import RecoveryCase, Transaction, SafetyPolicy
 from app.schemas import AIDiagnosisResponse, RootCauseEnum, RecommendedActionEnum
 from app.services.decision import DecisionEngine
 
@@ -8,9 +8,9 @@ def base_data():
     tx = Transaction(amount=100.0, currency="INR")
     case = RecoveryCase(signals={"recent_failures_count": 0})
     rules = [
-        AgentRule(rule_type="MAX_RETRIES", rule_value={"max_retries": 3}),
-        AgentRule(rule_type="HUMAN_APPROVAL_THRESHOLD", rule_value={"threshold": 1000.0}),
-        AgentRule(rule_type="FRAUD_FLAG", rule_value={"is_fraud": False})
+        SafetyPolicy(rule_type="MAX_RETRIES", rule_value={"max_retries": 3}),
+        SafetyPolicy(rule_type="HUMAN_APPROVAL_THRESHOLD", rule_value={"threshold": 1000.0}),
+        SafetyPolicy(rule_type="FRAUD_FLAG", rule_value={"is_fraud": False})
     ]
     return tx, case, rules
 

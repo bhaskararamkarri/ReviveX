@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.models import RecoveryCase, Transaction, AuditLog, AgentRule
+from app.models import RecoveryCase, Transaction, AuditLog, SafetyPolicy
 from app.services.diagnosis import AIDiagnosisService
 from app.services.decision import DecisionEngine
 from app.services.recovery import RecoveryEngine
@@ -52,7 +52,7 @@ class WorkflowOrchestrator:
         )
         
         # 2. Decide
-        rules = db.query(AgentRule).all()
+        rules = db.query(SafetyPolicy).all()
         decision = DecisionEngine.evaluate(case, transaction, diagnosis, rules)
         
         final_action_val = decision.decision.value if hasattr(decision.decision, 'value') else decision.decision

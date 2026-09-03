@@ -1,4 +1,4 @@
-"""Add SystemException model
+"""Add Incident model
 
 Revision ID: 323b0e264f8b
 Revises: 6cbffeb727e8

@@ -1,6 +1,6 @@
 import logging
 from typing import List
-from app.models import RecoveryCase, Transaction, AgentRule
+from app.models import RecoveryCase, Transaction, SafetyPolicy
 from app.schemas import AIDiagnosisResponse, DecisionExplanation, RecommendedActionEnum, RootCauseEnum
 
 logger = logging.getLogger(__name__)
@@ -11,7 +11,7 @@ class DecisionEngine:
         case: RecoveryCase, 
         transaction: Transaction, 
         ai_diagnosis: AIDiagnosisResponse,
-        merchant_rules: List[AgentRule]
+        merchant_rules: List[SafetyPolicy]
     ) -> DecisionExplanation:
         """
         Evaluates the AI diagnosis against deterministic guardrails.
