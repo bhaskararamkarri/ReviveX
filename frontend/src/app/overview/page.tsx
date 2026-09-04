@@ -73,6 +73,7 @@ export default async function Dashboard() {
   const atRisk = stats?.revenue_at_risk || 0;
   const recovered = stats?.revenue_recovered || 0;
   const recoverableEstimate = Math.round(atRisk * 0.78);
+  const recoveryRate = stats?.recovery_rate !== undefined ? Number(stats.recovery_rate).toFixed(1) : (atRisk > 0 ? ((recovered / atRisk) * 100).toFixed(1) : '0.0');
   const activeCasesCount = cases.filter(c => c.status === 'open' || c.status === 'pending_human_review').length;
 
   return (
@@ -105,6 +106,36 @@ export default async function Dashboard() {
           >
             <Zap size={14} className="text-amber-400" />
             <span>Simulator</span>
+          </Link>
+        </div>
+      </div>
+
+      {/* Primary ROI Metric Headline Banner */}
+      <div className="glass-panel p-5 sm:p-6 rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-purple-500/10 to-blue-500/10 shadow-[0_0_30px_rgba(16,185,129,0.15)] flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="p-3.5 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shrink-0 shadow-[0_0_15px_rgba(16,185,129,0.3)]">
+            <CheckCircle2 size={28} />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-emerald-400 tracking-wider uppercase flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              Platform Verified ROI & Recovery Yield
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight mt-0.5">
+              <span className="text-emerald-400">₹{recovered.toLocaleString()}</span> recovered per{' '}
+              <span className="text-gray-300">₹{atRisk.toLocaleString()}</span> at risk{' '}
+              <span className="text-purple-300 font-extrabold font-mono">({recoveryRate}% recovery rate)</span>
+            </h2>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-start md:self-auto shrink-0 text-xs">
+          <Link
+            href="/recovery"
+            className="px-4 py-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <span>View Recovery Ledger</span>
+            <ArrowRight size={13} />
           </Link>
         </div>
       </div>
