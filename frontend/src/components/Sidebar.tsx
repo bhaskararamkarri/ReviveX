@@ -21,6 +21,7 @@ import {
 
 export function Sidebar() {
   const pathname = usePathname();
+  const isDemoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true' || process.env.DEMO_MODE === 'true';
   
   const isActive = (path: string) => {
     if (path === '/overview') return pathname === '/overview' || pathname === '/';
@@ -45,7 +46,9 @@ export function Sidebar() {
           <div>
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-lg tracking-tight text-white group-hover:text-purple-300 transition-colors">ReviveX</span>
-              <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded">ENT</span>
+              <span className="px-1.5 py-0.5 text-[9px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded">
+                {isDemoMode ? 'DEMO' : 'ENT'}
+              </span>
             </div>
             <p className="text-[11px] text-gray-400 font-normal leading-tight">Revenue Recovery Infra</p>
           </div>
@@ -54,44 +57,63 @@ export function Sidebar() {
       
       {/* Navigation Groups */}
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-5 scrollbar-thin scrollbar-thumb-white/10">
-        {/* REVENUE INTELLIGENCE */}
-        <div>
-          <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Revenue Intelligence</p>
-          <div className="space-y-0.5">
-            <NavItem href="/overview" icon={<LayoutDashboard size={16} />} label="Overview" active={isActive('/overview')} />
-            <NavItem href="/incidents" icon={<AlertTriangle size={16} />} label="Incidents" active={isActive('/incidents')} />
-            <NavItem href="/risk-cases" icon={<ShieldAlert size={16} />} label="Risk Cases" active={isActive('/risk-cases')} />
-            <NavItem href="/investigations" icon={<BrainCircuit size={16} />} label="Investigations" active={isActive('/investigations')} />
+        {isDemoMode ? (
+          /* FOCUSED 4-ROUTE DEMO SURFACE */
+          <div>
+            <div className="px-3 py-1.5 mb-2 rounded bg-purple-500/10 border border-purple-500/20 text-[10px] font-semibold text-purple-300 flex items-center gap-1.5">
+              <Zap size={12} className="text-purple-400" />
+              <span>JUDGE DEMO MODE (4 ROUTES)</span>
+            </div>
+            <div className="space-y-1">
+              <NavItem href="/overview" icon={<LayoutDashboard size={16} />} label="1. Overview" active={isActive('/overview')} />
+              <NavItem href="/risk-cases/RC-001" icon={<ShieldAlert size={16} />} label="2. Risk Case Deep Dive" active={isActive('/risk-cases')} />
+              <NavItem href="/recovery" icon={<Radio size={16} className="text-emerald-400 animate-pulse" />} label="3. Recovery Monitor" badge="Live" active={isActive('/recovery')} />
+              <NavItem href="/audit" icon={<Activity size={16} />} label="4. Immutable Audit" active={isActive('/audit')} />
+            </div>
           </div>
-        </div>
+        ) : (
+          /* STANDARD FULL 12-ROUTE ENTERPRISE NAVIGATION */
+          <>
+            {/* REVENUE INTELLIGENCE */}
+            <div>
+              <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Revenue Intelligence</p>
+              <div className="space-y-0.5">
+                <NavItem href="/overview" icon={<LayoutDashboard size={16} />} label="Overview" active={isActive('/overview')} />
+                <NavItem href="/incidents" icon={<AlertTriangle size={16} />} label="Incidents" active={isActive('/incidents')} />
+                <NavItem href="/risk-cases" icon={<ShieldAlert size={16} />} label="Risk Cases" active={isActive('/risk-cases')} />
+                <NavItem href="/investigations" icon={<BrainCircuit size={16} />} label="Investigations" active={isActive('/investigations')} />
+              </div>
+            </div>
 
-        {/* RECOVERY */}
-        <div>
-          <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Recovery</p>
-          <div className="space-y-0.5">
-            <NavItem href="/recovery" icon={<Repeat size={16} />} label="Recovery Batches" active={pathname === '/recovery'} />
-            <NavItem href="/recovery?tab=active" icon={<Radio size={16} className="text-emerald-400 animate-pulse" />} label="Active Recovery" badge="Live" active={pathname === '/recovery'} />
-          </div>
-        </div>
+            {/* RECOVERY */}
+            <div>
+              <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Recovery</p>
+              <div className="space-y-0.5">
+                <NavItem href="/recovery" icon={<Repeat size={16} />} label="Recovery Batches" active={pathname === '/recovery'} />
+                <NavItem href="/recovery?tab=active" icon={<Radio size={16} className="text-emerald-400 animate-pulse" />} label="Active Recovery" badge="Live" active={pathname === '/recovery'} />
+              </div>
+            </div>
 
-        {/* OPERATIONS */}
-        <div>
-          <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Operations</p>
-          <div className="space-y-0.5">
-            <NavItem href="/transactions" icon={<FileText size={16} />} label="Transactions" active={isActive('/transactions')} />
-            <NavItem href="/audit" icon={<Activity size={16} />} label="Audit Trail" active={isActive('/audit')} />
-          </div>
-        </div>
+            {/* OPERATIONS */}
+            <div>
+              <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Operations</p>
+              <div className="space-y-0.5">
+                <NavItem href="/transactions" icon={<FileText size={16} />} label="Transactions" active={isActive('/transactions')} />
+                <NavItem href="/audit" icon={<Activity size={16} />} label="Audit Trail" active={isActive('/audit')} />
+              </div>
+            </div>
 
-        {/* CONTROL */}
-        <div>
-          <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Control & Intelligence</p>
-          <div className="space-y-0.5">
-            <NavItem href="/policies" icon={<Settings size={16} />} label="Safety Policies" active={isActive('/policies')} />
-            <NavItem href="/ai-assistant" icon={<Bot size={16} className="text-purple-400" />} label="AI Assistant" active={isActive('/ai-assistant')} />
-            <NavItem href="/developer-console" icon={<Zap size={16} />} label="Developer Console" active={isActive('/developer-console')} />
-          </div>
-        </div>
+            {/* CONTROL */}
+            <div>
+              <p className="px-3 text-[10px] font-bold text-gray-400 tracking-wider uppercase mb-1.5">Control & Intelligence</p>
+              <div className="space-y-0.5">
+                <NavItem href="/policies" icon={<Settings size={16} />} label="Safety Policies" active={isActive('/policies')} />
+                <NavItem href="/ai-assistant" icon={<Bot size={16} className="text-purple-400" />} label="AI Assistant" active={isActive('/ai-assistant')} />
+                <NavItem href="/developer-console" icon={<Zap size={16} />} label="Developer Console" active={isActive('/developer-console')} />
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Bottom Section */}
