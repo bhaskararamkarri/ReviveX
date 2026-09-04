@@ -126,10 +126,10 @@ def test_get_case_audit():
 def test_submit_human_action_retry():
     response = client.post(
         "/api/cases/case_route_test_001/action",
-        json={"action": "retry", "notes": "Approved by supervisor"}
+        json={"action": "retry", "reason": "Approved by supervisor"}
     )
     assert response.status_code == 200
-    assert "authorized successfully" in response.json()["message"]
+    assert "authorized" in response.json()["message"]
 
 def test_submit_human_action_not_found():
     response = client.post(

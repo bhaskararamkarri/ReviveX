@@ -77,7 +77,9 @@ class DecisionExplanation(BaseModel):
     rule: str
 
 class CaseActionRequest(BaseModel):
-    action: str # "retry", "send_nudge", "stop"
+    action: str # "approve", "reject", "retry", "send_nudge", "stop"
+    reason: Optional[str] = None # Notes or mandatory rejection reason
+    operator_id: Optional[str] = "ops_operator_1"
 
 class SettingsUpdate(BaseModel):
     max_retries: int = Field(ge=0, default=2)

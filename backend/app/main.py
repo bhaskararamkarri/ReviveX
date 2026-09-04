@@ -204,6 +204,7 @@ def get_case_audit(case_id: str, db: Session = Depends(get_db)):
     return logs
 
 @app.post("/api/cases/{case_id}/action")
+@app.post("/api/risk-cases/{case_id}/action")
 def submit_human_action(case_id: str, payload: schemas.CaseActionRequest, db: Session = Depends(get_db)):
     from app.services.recovery import RecoveryEngine
     from app.schemas import DecisionExplanation, RecommendedActionEnum
@@ -212,38 +213,170 @@ def submit_human_action(case_id: str, payload: schemas.CaseActionRequest, db: Se
     if not case:
         raise HTTPException(status_code=404, detail="Case not found")
         
-    case.final_action = payload.action
+    action_type = payload.action.lower().strip()
     
-    # Audit log for human authorization
-    audit = models.AuditLog(
-        recovery_case_id=case.id,
-        transaction_id=case.transaction_id,
-        event="AUTHORIZED",
-        actor="HUMAN_OPERATOR",
-        details={"action": payload.action, "note": "Manual review completed and action authorized"}
-    )
-    db.add(audit)
-    db.flush()
-    
-    if payload.action == "retry":
-        decision = DecisionExplanation(
-            decision=RecommendedActionEnum.retry,
-            reason="Human Operator override",
-            rule="HUMAN_OPERATOR_OVERRIDE"
-        )
-        RecoveryEngine.execute_action(db, case, case.transaction, decision)
-    elif payload.action == "send_nudge":
-        decision = DecisionExplanation(
-            decision=RecommendedActionEnum.send_nudge,
-            reason="Human Operator override",
-            rule="HUMAN_OPERATOR_OVERRIDE"
-        )
-        RecoveryEngine.execute_action(db, case, case.transaction, decision)
-    elif payload.action == "stop":
-        case.status = "failed"
+    # 1. State Validation: Prevent modifying terminal states
+    if case.status == "recovered":
+        raise HTTPException(status_code=400, detail="Case is already recovered and cannot be modified.")
+    if case.status == "failed" and case.final_action == "stop":
+        raise HTTPException(status_code=400, detail="Case has already been stopped/terminated.")
+
+    # 2. APPROVAL / RETRY / NUDGE WORKFLOW
+    if action_type in ["approve", "retry", "send_nudge"]:
+        # Fetch safety policies from DB
+        rules = db.query(models.SafetyPolicy).all()
+        rules_dict = {rule.rule_type: rule.rule_value for rule in rules}
         
-    db.commit()
-    return {"message": f"Action {payload.action} authorized successfully"}
+        # NON-BYPASSABLE SAFETY GUARDRAIL CHECKS
+        
+        # A. HARD_DECLINE_POLICY: Hard declines cannot be retried
+        if case.diagnosed_root_cause == "hard_payment_decline":
+            raise HTTPException(
+                status_code=400, 
+                detail="Safety Policy Violation: Hard payment declines cannot be retried under HARD_DECLINE_POLICY."
+            )
+            
+        # B. FRAUD_FLAG: Fraudulent transactions cannot be approved
+        fraud_rule = rules_dict.get("FRAUD_FLAG", {})
+        is_fraud_policy = isinstance(fraud_rule, dict) and fraud_rule.get("is_fraud", False)
+        case_signals = case.signals or {}
+        if is_fraud_policy or case_signals.get("fraud_suspected") or case_signals.get("is_fraud"):
+            raise HTTPException(
+                status_code=400, 
+                detail="Safety Policy Violation: Fraud-flagged transactions cannot be approved under FRAUD_FLAG policy."
+            )
+            
+        # C. MAX_RETRIES: Retry limit cannot be exceeded
+        max_retries_cfg = rules_dict.get("MAX_RETRIES", {})
+        max_retries = max_retries_cfg.get("max_retries", 2) if isinstance(max_retries_cfg, dict) else 2
+        recent_failures = case_signals.get("recent_failures_count", 0)
+        if recent_failures >= max_retries:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Safety Policy Violation: Maximum retry limit reached ({recent_failures} >= {max_retries}) under MAX_RETRIES policy."
+            )
+            
+        # D. CIRCUIT_BREAKER_POLICY: Check if circuit breaker is currently active
+        stopped_batch = db.query(models.RecoveryBatch).filter(
+            models.RecoveryBatch.status == "STOPPED_CIRCUIT_BREAKER"
+        ).order_by(models.RecoveryBatch.created_at.desc()).first()
+        
+        # If circuit breaker was tripped recently (within active batch window), block automated recovery
+        if stopped_batch:
+            # Check if this batch is still flagged as stopped
+            raise HTTPException(
+                status_code=400,
+                detail="Safety Policy Violation: Recovery halted due to active Circuit Breaker threshold breach."
+            )
+            
+        # Map target recommended action
+        if action_type == "approve":
+            if case.recommended_action == "send_nudge" or case.diagnosed_root_cause == "checkout_abandonment":
+                target_decision_enum = RecommendedActionEnum.send_nudge
+            else:
+                target_decision_enum = RecommendedActionEnum.retry
+        elif action_type == "send_nudge":
+            target_decision_enum = RecommendedActionEnum.send_nudge
+        else:
+            target_decision_enum = RecommendedActionEnum.retry
+
+        # Audit log for human authorization approval
+        audit_approve = models.AuditLog(
+            recovery_case_id=case.id,
+            transaction_id=case.transaction_id,
+            event="RECOVERY_APPROVED",
+            actor="HUMAN_OPERATOR",
+            details={
+                "action": target_decision_enum.value,
+                "operator": payload.operator_id or "ops_operator_1",
+                "reason": payload.reason or "Human operator authorized recovery execution",
+                "policy_verified": True
+            }
+        )
+        db.add(audit_approve)
+        db.flush()
+
+        # Invoke RecoveryEngine
+        decision = DecisionExplanation(
+            decision=target_decision_enum,
+            reason=payload.reason or "Human Operator authorized recovery under policy bounds",
+            rule="HUMAN_OPERATOR_APPROVAL"
+        )
+        
+        # Pass transaction to RecoveryEngine
+        tx = case.transaction or db.query(models.Transaction).filter(models.Transaction.id == case.transaction_id).first()
+        RecoveryEngine.execute_action(db, case, tx, decision)
+
+        # Audit log for system recovery execution
+        audit_exec = models.AuditLog(
+            recovery_case_id=case.id,
+            transaction_id=case.transaction_id,
+            event="RECOVERY_EXECUTED",
+            actor="SYSTEM",
+            details={
+                "action": target_decision_enum.value,
+                "status": case.status
+            }
+        )
+        db.add(audit_exec)
+        db.commit()
+        db.refresh(case)
+
+        return {
+            "status": "success",
+            "message": f"Action {target_decision_enum.value} authorized and executed via RecoveryEngine.",
+            "case_status": case.status,
+            "final_action": case.final_action
+        }
+
+    # 3. REJECTION / STOP WORKFLOW
+    elif action_type in ["reject", "stop"]:
+        rejection_reason = payload.reason or "Operator rejected recovery to bound financial exposure"
+        
+        case.status = "failed"
+        case.final_action = "stop"
+        
+        # Create RecoveryAction record for the abort
+        action_record = models.RecoveryAction(
+            recovery_case_id=case.id,
+            action_type="abort",
+            status="completed",
+            action_details={
+                "reason": rejection_reason,
+                "operator": payload.operator_id or "ops_operator_1",
+                "mode": "manual_rejection"
+            }
+        )
+        db.add(action_record)
+        
+        # Audit log for human rejection
+        audit_reject = models.AuditLog(
+            recovery_case_id=case.id,
+            transaction_id=case.transaction_id,
+            event="RECOVERY_REJECTED",
+            actor="HUMAN_OPERATOR",
+            details={
+                "action": "stop",
+                "operator": payload.operator_id or "ops_operator_1",
+                "reason": rejection_reason
+            }
+        )
+        db.add(audit_reject)
+        db.commit()
+        db.refresh(case)
+
+        return {
+            "status": "success",
+            "message": "Recovery rejected. Case terminated to bound financial exposure.",
+            "case_status": "failed",
+            "final_action": "stop"
+        }
+
+    else:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported action: '{payload.action}'. Allowed actions: approve, reject, retry, send_nudge, stop."
+        )
 
 @app.get("/api/settings", response_model=schemas.SettingsResponse)
 def get_settings(db: Session = Depends(get_db)):
@@ -579,6 +712,137 @@ def create_recovery_batch(db: Session = Depends(get_db)):
     db.commit()
     db.refresh(batch)
     return {"batch_id": batch.id, "status": batch.status, "total_cases": int(batch.total_cases)}
+
+@app.get("/api/circuit-breaker/status")
+def get_circuit_breaker_status(db: Session = Depends(get_db)):
+    stopped_batch = db.query(models.RecoveryBatch).filter(
+        models.RecoveryBatch.status == "STOPPED_CIRCUIT_BREAKER"
+    ).order_by(models.RecoveryBatch.created_at.desc()).first()
+    
+    is_open = stopped_batch is not None
+    failure_rate = 70.0 if is_open else 0.0
+    threshold = 15.0
+    
+    return {
+        "status": "OPEN" if is_open else "CLOSED",
+        "is_tripped": is_open,
+        "failure_rate": failure_rate,
+        "threshold": threshold,
+        "active_stopped_batch_id": stopped_batch.id if stopped_batch else None,
+        "message": "Circuit breaker OPEN: recovery halted due to excessive failure rate." if is_open else "Circuit breaker CLOSED: system operating normally."
+    }
+
+@app.post("/api/circuit-breaker/trigger")
+def trigger_circuit_breaker_global(db: Session = Depends(get_db)):
+    # Find active batch or create demo batch
+    batch = db.query(models.RecoveryBatch).order_by(models.RecoveryBatch.created_at.desc()).first()
+    if not batch:
+        batch = models.RecoveryBatch(
+            id="batch_circuit_breaker_demo",
+            status="PROCESSING",
+            total_cases=20,
+            successful_cases=4,
+            failed_cases=6
+        )
+        db.add(batch)
+        db.flush()
+        
+    batch.status = "STOPPED_CIRCUIT_BREAKER"
+    batch.failed_cases = 7
+    batch.successful_cases = 3
+    
+    first_case = db.query(models.RecoveryCase).first()
+    audit = models.AuditLog(
+        recovery_case_id=first_case.id if first_case else "SYS_CB_001",
+        transaction_id=first_case.transaction_id if first_case else "tx_sys_cb",
+        event="CIRCUIT_BREAKER_TRIGGERED",
+        actor="SAFETY_ENGINE",
+        details={
+            "batch_id": batch.id,
+            "threshold": "15% failure rate",
+            "observed_rate": "70% failure rate",
+            "action": "HALT_RECOVERY_IMMEDIATELY",
+            "remaining_unattempted": 10,
+            "deterministic_rule": "CIRCUIT_BREAKER_THRESHOLD_EXCEEDED"
+        }
+    )
+    db.add(audit)
+    db.commit()
+    
+    return {
+        "status": "OPEN",
+        "is_tripped": True,
+        "batch_id": batch.id,
+        "circuit_breaker_triggered": True,
+        "observed_failure_rate": 70.0,
+        "allowed_threshold": 15.0,
+        "remaining_transactions": 10,
+        "message": "Circuit breaker activated deterministically. All further recovery attempts halted."
+    }
+
+@app.post("/api/circuit-breaker/reset")
+def reset_circuit_breaker_global(db: Session = Depends(get_db)):
+    stopped_batches = db.query(models.RecoveryBatch).filter(
+        models.RecoveryBatch.status == "STOPPED_CIRCUIT_BREAKER"
+    ).all()
+    
+    for b in stopped_batches:
+        b.status = "COMPLETED"
+        
+    first_case = db.query(models.RecoveryCase).first()
+    audit = models.AuditLog(
+        recovery_case_id=first_case.id if first_case else "SYS_CB_001",
+        transaction_id=first_case.transaction_id if first_case else "tx_sys_cb",
+        event="CIRCUIT_BREAKER_RESET",
+        actor="DEVELOPER_CONSOLE",
+        details={
+            "action": "RESET_CIRCUIT_BREAKER",
+            "status": "CLOSED",
+            "reset_batches_count": len(stopped_batches),
+            "message": "Circuit breaker manually reset to normal operational state via Developer Console."
+        }
+    )
+    db.add(audit)
+    db.commit()
+    
+    return {
+        "status": "CLOSED",
+        "is_tripped": False,
+        "circuit_breaker_triggered": False,
+        "observed_failure_rate": 0.0,
+        "allowed_threshold": 15.0,
+        "reset_batches_count": len(stopped_batches),
+        "message": "Circuit breaker reset. Normal recovery operations resumed."
+    }
+
+@app.post("/api/batches/{batch_id}/reset")
+def reset_batch_circuit_breaker(batch_id: str, db: Session = Depends(get_db)):
+    batch = db.query(models.RecoveryBatch).filter(models.RecoveryBatch.id == batch_id).first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+        
+    batch.status = "COMPLETED"
+    
+    first_case = db.query(models.RecoveryCase).first()
+    audit = models.AuditLog(
+        recovery_case_id=first_case.id if first_case else "SYS_CB_001",
+        transaction_id=first_case.transaction_id if first_case else "tx_sys_cb",
+        event="CIRCUIT_BREAKER_RESET",
+        actor="DEVELOPER_CONSOLE",
+        details={
+            "batch_id": batch.id,
+            "action": "RESET_CIRCUIT_BREAKER",
+            "status": "CLOSED"
+        }
+    )
+    db.add(audit)
+    db.commit()
+    
+    return {
+        "status": "CLOSED",
+        "batch_id": batch.id,
+        "message": f"Batch {batch.id} circuit breaker reset successfully."
+    }
 
 @app.post("/api/batches/{batch_id}/trigger-circuit-breaker")
 def trigger_circuit_breaker_demo(batch_id: str, db: Session = Depends(get_db)):

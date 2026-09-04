@@ -123,4 +123,33 @@ describe('Frontend Highest-Traffic Pages Rendering Suite', () => {
       expect(screen.getByText('failed_payment')).toBeInTheDocument();
     });
   });
+
+  it('5. Renders Human Authorization Required controls when case status is pending_human_review', async () => {
+    // Override fetch for this test to return pending_human_review case
+    (global.fetch as any).mockImplementationOnce((url: string) => {
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          id: 'RC-HUMAN-01',
+          transaction_id: 'tx_human_01',
+          status: 'pending_human_review',
+          risk_type: 'high_value_checkout',
+          risk_severity: 'CRITICAL',
+          risk_amount: 25000.0,
+          diagnosed_root_cause: 'temporary_payment_failure',
+          confidence_score: 0.94,
+          recommended_action: 'retry',
+          final_action: null,
+          created_at: new Date().toISOString(),
+        }),
+      });
+    });
+
+    render(<RiskCaseDetailPage />);
+    await waitFor(() => {
+      expect(screen.getByText(/Human Authorization Required/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Approve Recovery/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Reject Recovery/i })).toBeInTheDocument();
+    });
+  });
 });

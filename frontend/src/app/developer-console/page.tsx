@@ -2,7 +2,10 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Play, ShieldAlert, CheckCircle2, AlertTriangle, Code, Database, Search, FileJson, Clock, Loader2, ArrowRight } from 'lucide-react';
+import { 
+  Play, ShieldAlert, CheckCircle2, AlertTriangle, Code, Database, 
+  Search, FileJson, Clock, Loader2, ArrowRight, RotateCcw, Zap, ZapOff, Check, X
+} from 'lucide-react';
 import { API_BASE } from '@/lib/config';
 
 interface ActionDetails {
@@ -42,6 +45,15 @@ type SimulatorResult = {
   audit_trail: Record<string, unknown>[];
 };
 
+interface CircuitBreakerStatus {
+  status: 'OPEN' | 'CLOSED';
+  is_tripped: boolean;
+  failure_rate: number;
+  threshold: number;
+  active_stopped_batch_id?: string | null;
+  message?: string;
+}
+
 function DeveloperConsoleContent() {
   const searchParams = useSearchParams();
   const initialScenario = searchParams.get('scenario') || 'temporary_failure';
@@ -66,6 +78,86 @@ function DeveloperConsoleContent() {
   const [selectedTraceIndex, setSelectedTraceIndex] = useState<number | null>(null);
   const [inspectorTab, setInspectorTab] = useState<'overview' | 'input' | 'output' | 'rules' | 'database'>('overview');
   const [error, setError] = useState('');
+
+  // Circuit Breaker State
+  const [cbStatus, setCbStatus] = useState<CircuitBreakerStatus | null>(null);
+  const [cbLoading, setCbLoading] = useState(false);
+  const [cbFeedback, setCbFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const fetchCbStatus = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/circuit-breaker/status`);
+      if (res.ok) {
+        setCbStatus(await res.json());
+      }
+    } catch (err) {
+      console.error('Failed to fetch circuit breaker status:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchCbStatus();
+  }, []);
+
+  const handleTriggerCircuitBreaker = async () => {
+    setCbLoading(true);
+    setCbFeedback(null);
+    try {
+      const res = await fetch(`${API_BASE}/circuit-breaker/trigger`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCbFeedback({
+          type: 'success',
+          message: data.message || 'Circuit breaker triggered. Automated retries halted.'
+        });
+        await fetchCbStatus();
+      } else {
+        setCbFeedback({
+          type: 'error',
+          message: data.detail || 'Failed to trigger circuit breaker.'
+        });
+      }
+    } catch (err: any) {
+      setCbFeedback({
+        type: 'error',
+        message: err?.message || 'Network error triggering circuit breaker.'
+      });
+    } finally {
+      setCbLoading(false);
+    }
+  };
+
+  const handleResetCircuitBreaker = async () => {
+    setCbLoading(true);
+    setCbFeedback(null);
+    try {
+      const res = await fetch(`${API_BASE}/circuit-breaker/reset`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCbFeedback({
+          type: 'success',
+          message: data.message || 'Circuit breaker reset. Normal recovery operations resumed.'
+        });
+        await fetchCbStatus();
+      } else {
+        setCbFeedback({
+          type: 'error',
+          message: data.detail || 'Failed to reset circuit breaker.'
+        });
+      }
+    } catch (err: any) {
+      setCbFeedback({
+        type: 'error',
+        message: err?.message || 'Network error resetting circuit breaker.'
+      });
+    } finally {
+      setCbLoading(false);
+    }
+  };
 
   const handleRunSimulation = async () => {
     setLoading(true);
@@ -110,8 +202,9 @@ function DeveloperConsoleContent() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* CONFIGURATION PANEL */}
-        <div className="lg:col-span-1 space-y-4">
+        {/* LEFT COLUMN: CONFIGURATION + CIRCUIT BREAKER */}
+        <div className="lg:col-span-1 space-y-6">
+          {/* SCENARIO CONFIGURATION PANEL */}
           <div className="glass-panel p-6 space-y-6 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
               <Code size={120} />
@@ -171,7 +264,7 @@ function DeveloperConsoleContent() {
               <button 
                 onClick={handleRunSimulation}
                 disabled={loading}
-                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 mt-4"
+                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-medium py-3 rounded-lg flex items-center justify-center gap-2 transition-colors disabled:opacity-50 mt-4 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
               >
                 {loading ? <Loader2 className="animate-spin" size={18} /> : <Play size={18} />}
                 RUN SIMULATION
@@ -184,9 +277,78 @@ function DeveloperConsoleContent() {
               )}
             </div>
           </div>
+
+          {/* CIRCUIT BREAKER SIMULATION CONTROL */}
+          <div className="glass-panel p-6 space-y-4 border border-amber-500/20 bg-amber-500/5 relative overflow-hidden">
+            <div className="flex items-center justify-between border-b border-amber-500/20 pb-3">
+              <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
+                <AlertTriangle size={16} />
+                <span>Circuit Breaker Simulation</span>
+              </div>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase ${
+                cbStatus?.is_tripped 
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse' 
+                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              }`}>
+                {cbStatus?.status || 'CLOSED'}
+              </span>
+            </div>
+
+            <p className="text-xs text-gray-300">
+              Simulate an emergency systemic outage. When open, all automated and manual recovery calls are deterministically blocked by policy.
+            </p>
+
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5">
+                <span className="text-gray-400 text-[10px] block">Observed Failure Rate</span>
+                <span className={`text-sm font-bold font-mono ${cbStatus?.is_tripped ? 'text-red-400' : 'text-gray-200'}`}>
+                  {cbStatus ? `${cbStatus.failure_rate.toFixed(1)}%` : '0.0%'}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-lg bg-black/40 border border-white/5">
+                <span className="text-gray-400 text-[10px] block">Max Policy Limit</span>
+                <span className="text-sm font-bold font-mono text-amber-300">
+                  {cbStatus ? `${cbStatus.threshold.toFixed(1)}%` : '15.0%'}
+                </span>
+              </div>
+            </div>
+
+            {cbFeedback && (
+              <div className={`p-2.5 rounded text-xs flex items-center justify-between ${
+                cbFeedback.type === 'success' 
+                  ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300' 
+                  : 'bg-red-500/10 border border-red-500/20 text-red-300'
+              }`}>
+                <div className="flex items-center gap-1.5">
+                  {cbFeedback.type === 'success' ? <Check size={13} /> : <X size={13} />}
+                  <span>{cbFeedback.message}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                disabled={cbLoading}
+                onClick={handleTriggerCircuitBreaker}
+                className="flex-1 px-3 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 shadow-[0_0_10px_rgba(239,68,68,0.3)]"
+              >
+                {cbLoading ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+                <span>Trigger Circuit Breaker</span>
+              </button>
+
+              <button
+                disabled={cbLoading}
+                onClick={handleResetCircuitBreaker}
+                className="px-3 py-2 bg-white/10 hover:bg-white/20 text-gray-200 rounded-lg text-xs font-medium flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 border border-white/10"
+              >
+                <RotateCcw size={13} />
+                <span>Reset Demo</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* EXECUTION TIMELINE & INSPECTOR */}
+        {/* RIGHT COLUMN: EXECUTION TIMELINE & INSPECTOR */}
         <div className="lg:col-span-2 flex flex-col md:flex-row gap-6">
           
           {/* TIMELINE */}
@@ -248,8 +410,8 @@ function DeveloperConsoleContent() {
                       </div>
                       
                       <div className="flex items-center gap-1 bg-black/30 px-2 py-1 rounded-md border border-white/5">
-                        <Clock size={12} className="text-emerald-500" />
-                        <span className="text-xs font-mono text-gray-300">{trace.duration_ms}ms</span>
+                        <Clock size={10} className="text-gray-500" />
+                        <span className="text-[10px] font-mono text-gray-400">{trace.duration_ms}ms</span>
                       </div>
                     </div>
                   </div>
@@ -259,83 +421,83 @@ function DeveloperConsoleContent() {
           </div>
 
           {/* INSPECTOR */}
-          <div className="glass-panel p-6 flex-1 min-w-[320px] flex flex-col h-[600px]">
-            <h2 className="text-lg font-semibold text-white mb-4">Stage Inspector</h2>
-            
-            {!result ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+          <div className="glass-panel p-6 flex-1 min-w-[320px] border border-white/10 flex flex-col">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-lg font-semibold text-white">Stage Inspector</h2>
+              {selectedTraceIndex !== null && result && (
+                <span className="text-xs bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded border border-emerald-500/20 font-mono">
+                  {result.traces[selectedTraceIndex].stage}
+                </span>
+              )}
+            </div>
+
+            {selectedTraceIndex === null || !result || !result.traces[selectedTraceIndex] ? (
+              <div className="flex flex-col items-center justify-center flex-1 text-gray-500 gap-4 min-h-[300px]">
                 <FileJson size={32} className="opacity-20" />
-                <p>Select a stage to inspect details.</p>
-              </div>
-            ) : selectedTraceIndex === null ? (
-              <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
-                <ArrowRight size={32} className="opacity-20" />
-                <p>Select a stage from the trace.</p>
+                <p className="text-center text-sm">Select any stage on the left to inspect its input, output, and guardrails.</p>
               </div>
             ) : (
-              <div className="flex flex-col h-full flex-1">
+              <div className="flex-1 flex flex-col">
                 {/* Tabs */}
-                <div className="flex overflow-x-auto gap-2 border-b border-white/10 pb-3 mb-4 shrink-0">
-                  {['overview', 'input', 'output', 'database'].map((tab) => {
-                    const trace = result.traces[selectedTraceIndex];
-                    if (tab === 'database' && !trace.db_operation) return null;
-                    
-                    return (
-                      <button
-                        key={tab}
-                        onClick={() => setInspectorTab(tab as typeof inspectorTab)}
-                        className={`text-xs uppercase tracking-wider px-3 py-1.5 rounded-md transition-colors whitespace-nowrap
-                          ${inspectorTab === tab ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5'}
-                        `}
-                      >
-                        {tab}
-                      </button>
-                    )
-                  })}
+                <div className="flex border-b border-white/10 gap-4 mb-4 text-xs font-medium">
+                  <button 
+                    onClick={() => setInspectorTab('overview')}
+                    className={`pb-2 transition-colors ${inspectorTab === 'overview' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    Overview
+                  </button>
+                  <button 
+                    onClick={() => setInspectorTab('input')}
+                    className={`pb-2 transition-colors ${inspectorTab === 'input' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    Input Context
+                  </button>
+                  <button 
+                    onClick={() => setInspectorTab('output')}
+                    className={`pb-2 transition-colors ${inspectorTab === 'output' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    Output / Telemetry
+                  </button>
+                  {result.traces[selectedTraceIndex].db_operation && (
+                    <button 
+                      onClick={() => setInspectorTab('database')}
+                      className={`pb-2 transition-colors ${inspectorTab === 'database' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-gray-400 hover:text-white'}`}
+                    >
+                      Database Action
+                    </button>
+                  )}
                 </div>
-                
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
+
+                {/* Tab Content */}
+                <div className="flex-1 text-sm overflow-y-auto max-h-[400px]">
                   {inspectorTab === 'overview' && (
-                    <div className="space-y-4 text-sm">
+                    <div className="space-y-4">
                       <div>
-                        <span className="text-gray-500 block mb-1">Status</span>
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium border
-                          ${result.traces[selectedTraceIndex].status === 'SUCCESS' ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' : 
-                            result.traces[selectedTraceIndex].status === 'BLOCKED' ? 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' :
-                            'text-red-400 bg-red-400/10 border-red-400/20'}
-                        `}>
-                          {result.traces[selectedTraceIndex].status}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-500 block mb-1">Service & Method</span>
-                        <div className="font-mono text-emerald-400/80 bg-black/40 p-2 rounded border border-white/5 text-xs">
-                          {result.traces[selectedTraceIndex].service}.{result.traces[selectedTraceIndex].method}()
+                        <span className="text-gray-500 block mb-1">Execution Target</span>
+                        <div className="font-mono text-emerald-400 bg-black/40 p-2 rounded border border-white/5 text-xs">
+                          {result.traces[selectedTraceIndex].service}::{result.traces[selectedTraceIndex].method}()
                         </div>
                       </div>
                       <div>
-                        <span className="text-gray-500 block mb-1">Reason / Notes</span>
-                        <p className="text-gray-300 bg-white/5 p-3 rounded-lg border border-white/5">
+                        <span className="text-gray-500 block mb-1">Applied Guardrails</span>
+                        <div className="font-mono text-purple-400 bg-black/40 p-2 rounded border border-white/5 text-xs">
+                          {result.traces[selectedTraceIndex].rules_applied || "NONE"}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 block mb-1">Explanation / Safety Reason</span>
+                        <p className="text-gray-300 text-xs bg-white/5 p-3 rounded-lg border border-white/5">
                           {result.traces[selectedTraceIndex].reason}
                         </p>
                       </div>
-                      {result.traces[selectedTraceIndex].rules_applied && (
-                        <div>
-                          <span className="text-gray-500 block mb-1">Rules Evaluated</span>
-                          <p className="text-indigo-300 bg-indigo-500/10 p-2 rounded-lg border border-indigo-500/20 font-mono text-xs">
-                            {result.traces[selectedTraceIndex].rules_applied}
-                          </p>
-                        </div>
-                      )}
                       {result.traces[selectedTraceIndex].output_data?.action_details?.short_url && (
-                        <div className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                          <span className="text-xs text-emerald-400 font-semibold block mb-1">Razorpay Test Payment Link:</span>
+                        <div>
+                          <span className="text-gray-500 block mb-1">Live Payment Link Generated</span>
                           <a 
-                            href={result.traces[selectedTraceIndex].output_data.action_details.short_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-2 text-xs bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1.5 rounded font-medium transition-colors"
+                            href={result.traces[selectedTraceIndex].output_data?.action_details?.short_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-400 hover:text-emerald-300 underline"
                           >
                             Open Razorpay Test Checkout ↗
                           </a>
@@ -380,6 +542,7 @@ function DeveloperConsoleContent() {
                 </div>
               </div>
             )}
+
           </div>
           
         </div>
