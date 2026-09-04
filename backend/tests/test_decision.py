@@ -118,3 +118,41 @@ def test_rule_unknown_cause_human_review(base_data):
     decision = DecisionEngine.evaluate(case, tx, ai_diag, rules)
     assert decision.decision == RecommendedActionEnum.human_review
     assert decision.rule == "UNKNOWN_CAUSE_POLICY"
+
+def test_rule_threshold_boundary_exact_amount(base_data):
+    tx, case, rules = base_data
+    # Exactly 1000.0 is <= 1000.0, so it should NOT trigger HUMAN_APPROVAL_THRESHOLD
+    tx.amount = 1000.0
+    ai_diag = AIDiagnosisResponse(
+        root_cause=RootCauseEnum.temporary_payment_failure,
+        confidence=0.9,
+        recommended_action=RecommendedActionEnum.retry
+    )
+    decision = DecisionEngine.evaluate(case, tx, ai_diag, rules)
+    assert decision.decision == RecommendedActionEnum.retry
+    assert decision.rule == "TEMPORARY_FAILURE_POLICY"
+
+def test_rule_null_signals_and_empty_rules():
+    tx = Transaction(amount=50.0, currency="INR")
+    case = RecoveryCase(signals=None)
+    rules = []
+    ai_diag = AIDiagnosisResponse(
+        root_cause=RootCauseEnum.temporary_payment_failure,
+        confidence=0.9,
+        recommended_action=RecommendedActionEnum.retry
+    )
+    decision = DecisionEngine.evaluate(case, tx, ai_diag, rules)
+    assert decision.decision == RecommendedActionEnum.retry
+    assert decision.rule == "TEMPORARY_FAILURE_POLICY"
+
+def test_rule_repeated_failure_passthrough(base_data):
+    tx, case, rules = base_data
+    ai_diag = AIDiagnosisResponse(
+        root_cause=RootCauseEnum.repeated_failure,
+        confidence=0.85,
+        recommended_action=RecommendedActionEnum.human_review
+    )
+    decision = DecisionEngine.evaluate(case, tx, ai_diag, rules)
+    assert decision.decision == RecommendedActionEnum.human_review
+    assert decision.rule == "AI_PASSTHROUGH"
+

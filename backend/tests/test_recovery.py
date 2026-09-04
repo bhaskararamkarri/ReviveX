@@ -95,3 +95,56 @@ def test_execute_stop(mocker, base_case_tx):
     
     assert updated_case.status == "failed"
     assert updated_case.final_action == "stop"
+
+def test_is_live_recovery_enabled_truthy(monkeypatch):
+    for val in ["true", "1", "yes", "TRUE", "Yes"]:
+        monkeypatch.setenv("RAZORPAY_LIVE_RECOVERY_ENABLED", val)
+        assert RecoveryEngine.is_live_recovery_enabled() is True
+
+def test_is_live_recovery_enabled_falsy(monkeypatch):
+    for val in ["false", "0", "no", "FALSE", "", "random"]:
+        monkeypatch.setenv("RAZORPAY_LIVE_RECOVERY_ENABLED", val)
+        assert RecoveryEngine.is_live_recovery_enabled() is False
+
+def test_execute_live_recovery_success(mocker, monkeypatch, base_case_tx):
+    case, tx = base_case_tx
+    monkeypatch.setenv("RAZORPAY_LIVE_RECOVERY_ENABLED", "true")
+    
+    decision = DecisionExplanation(
+        decision=RecommendedActionEnum.retry,
+        reason="Test live retry",
+        rule="POLICY"
+    )
+    
+    mock_db = mocker.MagicMock()
+    mocker.patch(
+        "app.services.razorpay.RazorpayWebhookService.create_payment_link",
+        return_value={"id": "plink_test_live_123", "short_url": "https://rzp.io/i/test", "status": "created"}
+    )
+    
+    updated_case = RecoveryEngine.execute_action(mock_db, case, tx, decision)
+    assert updated_case.status == "open"
+    assert updated_case.final_action == "retry"
+
+def test_execute_live_recovery_exception_fallback(mocker, monkeypatch, base_case_tx):
+    case, tx = base_case_tx
+    tx.amount = 100.0  # even -> simulated_success on fallback
+    monkeypatch.setenv("RAZORPAY_LIVE_RECOVERY_ENABLED", "true")
+    
+    decision = DecisionExplanation(
+        decision=RecommendedActionEnum.retry,
+        reason="Test live retry with error",
+        rule="POLICY"
+    )
+    
+    mock_db = mocker.MagicMock()
+    mocker.patch(
+        "app.services.razorpay.RazorpayWebhookService.create_payment_link",
+        side_effect=Exception("Gateway Network Timeout")
+    )
+    
+    updated_case = RecoveryEngine.execute_action(mock_db, case, tx, decision)
+    # Should fallback to dry run simulation
+    assert updated_case.status == "simulated_success"
+    assert updated_case.final_action == "retry"
+

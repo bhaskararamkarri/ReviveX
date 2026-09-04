@@ -116,3 +116,23 @@ def test_diagnose_nemotron_normalization(sample_data):
             assert result.root_cause == RootCauseEnum.temporary_payment_failure
             assert result.confidence == 0.8
             assert result.recommended_action == RecommendedActionEnum.retry
+
+def test_diagnose_nvidia_provider(sample_data):
+    case, tx = sample_data
+    with patch.dict(os.environ, {"AI_PROVIDER": "nvidia", "NVIDIA_API_KEY": "dummy_nv_key"}):
+        with patch("app.services.diagnosis.OpenAI") as MockOpenAI:
+            mock_client_instance = MockOpenAI.return_value
+            mock_response = MagicMock()
+            mock_message = MagicMock()
+            mock_message.content = '{"root_cause": "checkout_abandonment", "confidence": 0.88, "recommended_action": "send_nudge"}'
+            mock_choice = MagicMock()
+            mock_choice.message = mock_message
+            mock_response.choices = [mock_choice]
+            mock_client_instance.chat.completions.create.return_value = mock_response
+            
+            result = AIDiagnosisService.diagnose(case, tx)
+            assert result.root_cause == RootCauseEnum.checkout_abandonment
+            assert result.confidence == 0.88
+            assert result.recommended_action == RecommendedActionEnum.send_nudge
+            MockOpenAI.assert_called_with(api_key="dummy_nv_key", base_url="https://integrate.api.nvidia.com/v1")
+

@@ -229,14 +229,14 @@ def submit_human_action(case_id: str, payload: schemas.CaseActionRequest, db: Se
         decision = DecisionExplanation(
             decision=RecommendedActionEnum.retry,
             reason="Human Operator override",
-            confidence=1.0
+            rule="HUMAN_OPERATOR_OVERRIDE"
         )
         RecoveryEngine.execute_action(db, case, case.transaction, decision)
     elif payload.action == "send_nudge":
         decision = DecisionExplanation(
             decision=RecommendedActionEnum.send_nudge,
             reason="Human Operator override",
-            confidence=1.0
+            rule="HUMAN_OPERATOR_OVERRIDE"
         )
         RecoveryEngine.execute_action(db, case, case.transaction, decision)
     elif payload.action == "stop":
@@ -597,20 +597,23 @@ def trigger_circuit_breaker_demo(batch_id: str, db: Session = Depends(get_db)):
     batch.failed_cases = 7
     batch.successful_cases = 3
     
-    audit = models.AuditLog(
-        recovery_case_id="BATCH_" + batch.id[:8],
-        transaction_id="SYSTEM",
-        event="CIRCUIT_BREAKER_TRIGGERED",
-        actor="SAFETY_ENGINE",
-        details={
-            "threshold": "15% failure rate",
-            "observed_rate": "70% failure rate",
-            "action": "HALT_RECOVERY_IMMEDIATELY",
-            "remaining_unattempted": 10,
-            "deterministic_rule": "CIRCUIT_BREAKER_THRESHOLD_EXCEEDED"
-        }
-    )
-    db.add(audit)
+    first_case = db.query(models.RecoveryCase).first()
+    if first_case:
+        audit = models.AuditLog(
+            recovery_case_id=first_case.id,
+            transaction_id=first_case.transaction_id,
+            event="CIRCUIT_BREAKER_TRIGGERED",
+            actor="SAFETY_ENGINE",
+            details={
+                "batch_id": batch.id,
+                "threshold": "15% failure rate",
+                "observed_rate": "70% failure rate",
+                "action": "HALT_RECOVERY_IMMEDIATELY",
+                "remaining_unattempted": 10,
+                "deterministic_rule": "CIRCUIT_BREAKER_THRESHOLD_EXCEEDED"
+            }
+        )
+        db.add(audit)
     db.commit()
     
     return {
@@ -649,7 +652,7 @@ def ai_assistant_chat(payload: schemas.AIAssistantChatRequest, db: Session = Dep
 
     if "recoverable" in user_query:
         recoverable_count = db.query(func.count(models.RecoveryCase.id)).filter(models.RecoveryCase.recommended_action == "retry").scalar() or 14
-        recoverable_est = float(total_at_risk * 0.78)
+        recoverable_est = float(total_at_risk) * 0.78
         reply = (
             f"Currently, {recoverable_count} transactions (approx ₹{recoverable_est:,.2f}) qualify as recoverable under our TEMPORARY_FAILURE_POLICY.\n"
             "These transactions failed due to transient gateway timeouts or network glitches with zero retry history, making them safe candidates for bounded Razorpay Payment Link recovery."

@@ -178,6 +178,7 @@ class RazorpayWebhookService:
             status_map = {
                 "failed": "failed",
                 "authorized": "abandoned", 
+                "abandoned": "abandoned",
                 "captured": "success"
             }
             
