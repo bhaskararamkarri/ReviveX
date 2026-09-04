@@ -10,6 +10,10 @@ frontend/.env
 frontend/.env*
 frontend/.env.local
 frontend/.env.*.local
+!.env.example
+!*.env.example
+!backend/.env.example
+!frontend/.env.example
 
 # Backend
 backend/venv/
