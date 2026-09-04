@@ -24,7 +24,7 @@ def test_execute_retry_success(mocker, base_case_tx):
     
     updated_case = RecoveryEngine.execute_action(mock_db, case, tx, decision)
     
-    assert updated_case.status == "recovered"
+    assert updated_case.status == "simulated_success"
     assert updated_case.final_action == "retry"
     mock_db.add.assert_called()
     mock_db.commit.assert_called()
@@ -61,7 +61,7 @@ def test_execute_send_nudge(mocker, base_case_tx):
     
     updated_case = RecoveryEngine.execute_action(mock_db, case, tx, decision)
     
-    assert updated_case.status == "recovered"
+    assert updated_case.status == "simulated_success"
     assert updated_case.final_action == "send_nudge"
 
 def test_execute_human_approval(mocker, base_case_tx):

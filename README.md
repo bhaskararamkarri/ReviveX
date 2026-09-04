@@ -101,7 +101,7 @@ The ReviveX frontend is engineered with **Next.js 16 (Turbopack)** and Vanilla C
 | **Frontend** | **Next.js 16.3.2 (Turbopack)**, React 19, TypeScript, Vanilla CSS Design System, Recharts, Lucide Icons |
 | **Backend API** | **FastAPI 0.141**, Python 3.11 / 3.14, Pydantic v2, Uvicorn, Httpx |
 | **Database & ORM** | **PostgreSQL**, SQLAlchemy 2.0 (with connection pooling & pre-ping), Alembic |
-| **AI / LLM Engine** | **NVIDIA Integrate API** (`nvidia/nemotron-3-nano-30b-a3b`, `meta/llama-3.3-70b-instruct`) with JSON schema enforcement |
+| **AI / LLM Engine** | **NVIDIA Integrate API** (`meta/llama-3.3-70b-instruct`) with JSON schema enforcement |
 | **Payment Gateway** | **Razorpay Payments & Payment Links API** (Test Mode HMAC-SHA256 signature verification) |
 | **Safety Engine** | Deterministic Guardrail Policies, Circuit Breakers, Pre-Flight Verification |
 
@@ -124,8 +124,6 @@ ReviveX/
 │   │       ├── decision.py              # Authoritative Guardrails & DecisionEngine
 │   │       ├── detection.py             # Rule-based failure detection & risk classifier
 │   │       ├── diagnosis.py             # NVIDIA Nemotron LLM diagnosis & prompt engine
-│   │       ├── guardrail.py             # Auxiliary rule validation service
-│   │       ├── llm.py                   # LLM client abstractions
 │   │       ├── orchestrator.py          # End-to-end pipeline orchestrator & audit logger
 │   │       ├── razorpay.py              # Razorpay Payment Links API & webhook verification
 │   │       ├── recovery.py              # Real Razorpay recovery execution & simulation engine
@@ -230,7 +228,7 @@ FRONTEND_URL=http://localhost:3000
 AI_PROVIDER=nvidia
 NVIDIA_API_KEY=nvapi-your-key-here
 NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1
-NVIDIA_MODEL=nvidia/nemotron-3-nano-30b-a3b
+NVIDIA_MODEL=meta/llama-3.3-70b-instruct
 
 # Razorpay Test Mode Configuration
 RAZORPAY_WEBHOOK_SECRET=your_test_webhook_secret
@@ -247,6 +245,11 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
 ---
 
 ## 🚀 Quickstart & Verification
+
+> [!WARNING]
+> **Before you demo:** Our live deployments use Render's free tier for the backend and Vercel for the frontend. Due to free-tier limitations, the Render backend spins down after inactivity. You may experience a cold-start latency of up to 50 seconds on your first request. Please warm up the endpoints beforehand by visiting:
+> - Backend: https://revivex-nzdp.onrender.com/health
+> - Frontend: https://revive-x-five.vercel.app
 
 ### 1. Run Backend Server
 ```bash
@@ -285,6 +288,21 @@ npm run build
 - **Strict Test-Mode Isolation**: ReviveX validates the `rzp_test_` prefix on Razorpay keys to prevent accidental live charges.
 - **Deduplication & Idempotency**: `WebhookEvent` and `idempotency_key` locking guarantee that duplicate webhook retries never produce duplicate charges or recovery loops.
 - **Deterministic Circuit Breakers**: If downstream failure rate exceeds 15%, the system immediately trips the circuit breaker, protecting merchant credibility.
+
+---
+
+## 🔧 What Broke & How We Fixed It
+During our final pre-competition validation, we identified and fixed the following real issues:
+
+- **Simulator NameError Crash**
+  - **What broke**: Opening the Developer Console simulator crashed the backend due to an unresolved reference to `RecoveryAction` in `simulator.py`.
+  - **How it was caught**: During an end-to-end integrity test of the UI pipeline.
+  - **The fix**: Imported `RecoveryAction` into `simulator.py` and patched the env path loading (commit `b2aead3`).
+
+- **LLM Diagnosis Malformed JSON Keys**
+  - **What broke**: The NVIDIA Nemotron 70B model occasionally prefixed JSON keys with dots (e.g. `".root_cause"` instead of `"root_cause"`), causing Pydantic validation failures that dropped valid AI diagnostics into manual human review.
+  - **How it was caught**: Investigating `ValidationError` logs in the audit trail.
+  - **The fix**: Implemented a deterministic string-replacement normalization layer in `diagnosis.py` to strip the bad dot notation before Pydantic parsing (commit `217ae8f`).
 
 ---
 

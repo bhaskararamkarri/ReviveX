@@ -161,7 +161,7 @@ export function DashboardCharts({ breakdown, stats }: DashboardChartsProps) {
                   borderRadius: '8px',
                   fontSize: '12px'
                 }} 
-                formatter={(value: any, name: any) => [`₹${Number(value).toLocaleString()}`, name === 'atRisk' ? 'Revenue At Risk' : name === 'recovered' ? 'Revenue Recovered' : 'Processed Volume']}
+                formatter={(value: unknown, name: unknown) => [`₹${Number(value || 0).toLocaleString()}`, name === 'atRisk' ? 'Revenue At Risk' : name === 'recovered' ? 'Revenue Recovered' : 'Processed Volume']}
               />
               <Area type="monotone" dataKey="processed" stroke="#6366f1" strokeWidth={1.5} fillOpacity={0.05} fill="#6366f1" />
               <Area type="monotone" dataKey="atRisk" stroke="#ef4444" strokeWidth={2} fillOpacity={1} fill="url(#colorAtRisk)" />

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Play, ShieldAlert, CheckCircle2, AlertTriangle, Code, Database, Search, FileJson, Clock, Loader2, ArrowRight } from 'lucide-react';
 import { API_BASE } from '@/lib/config';
 
@@ -41,11 +42,24 @@ type SimulatorResult = {
   audit_trail: Record<string, unknown>[];
 };
 
-export default function DeveloperConsole() {
-  const [scenario, setScenario] = useState('temporary_failure');
+function DeveloperConsoleContent() {
+  const searchParams = useSearchParams();
+  const initialScenario = searchParams.get('scenario') || 'temporary_failure';
+
+  const [scenario, setScenario] = useState(initialScenario);
   const [amount, setAmount] = useState('2500');
   const [retryCount, setRetryCount] = useState('0');
   const [fraudFlag, setFraudFlag] = useState(false);
+
+  useEffect(() => {
+    const sc = searchParams.get('scenario');
+    if (sc) {
+      setScenario(sc);
+      if (sc === 'high_value') setAmount('75000');
+      if (sc === 'retry_limit') setRetryCount('4');
+      if (sc === 'fraud') setFraudFlag(true);
+    }
+  }, [searchParams]);
 
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SimulatorResult | null>(null);
@@ -371,5 +385,13 @@ export default function DeveloperConsole() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DeveloperConsolePage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-400">Loading developer console...</div>}>
+      <DeveloperConsoleContent />
+    </Suspense>
   );
 }

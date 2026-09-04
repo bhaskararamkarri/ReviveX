@@ -112,9 +112,12 @@ export default async function Dashboard() {
       {/* Top 4 KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Revenue at Risk */}
-        <div className="glass-panel p-5 rounded-xl border border-red-500/20 bg-gradient-to-b from-red-500/5 to-transparent relative overflow-hidden">
+        <Link 
+          href="/risk-cases?status=open"
+          className="glass-panel p-5 rounded-xl border border-red-500/20 bg-gradient-to-b from-red-500/5 to-transparent relative overflow-hidden hover:border-red-500/40 hover:bg-red-500/10 transition-all cursor-pointer group block"
+        >
           <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
-            <span className="font-medium">Revenue at Risk</span>
+            <span className="font-medium group-hover:text-red-300 transition-colors">Revenue at Risk</span>
             <span className="p-1.5 rounded-md bg-red-500/10 text-red-400">
               <ShieldAlert size={14} />
             </span>
@@ -124,12 +127,15 @@ export default async function Dashboard() {
             <span className="text-red-400 font-medium">Degraded Rail Impact</span>
             <span>{stats?.cases_processed || 0} failures tracked</span>
           </div>
-        </div>
+        </Link>
 
         {/* Recoverable Revenue */}
-        <div className="glass-panel p-5 rounded-xl border border-amber-500/20 bg-gradient-to-b from-amber-500/5 to-transparent">
+        <Link 
+          href="/risk-cases?status=open"
+          className="glass-panel p-5 rounded-xl border border-amber-500/20 bg-gradient-to-b from-amber-500/5 to-transparent hover:border-amber-500/40 hover:bg-amber-500/10 transition-all cursor-pointer group block"
+        >
           <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
-            <span className="font-medium">Recoverable Revenue</span>
+            <span className="font-medium group-hover:text-amber-300 transition-colors">Recoverable Revenue</span>
             <span className="p-1.5 rounded-md bg-amber-500/10 text-amber-400">
               <TrendingUp size={14} />
             </span>
@@ -139,12 +145,15 @@ export default async function Dashboard() {
             <span className="text-amber-400 font-medium">Policy-Eligible (78%)</span>
             <span>Bounded exposure cap</span>
           </div>
-        </div>
+        </Link>
 
         {/* Revenue Recovered */}
-        <div className="glass-panel p-5 rounded-xl border border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 to-transparent">
+        <Link 
+          href="/recovery"
+          className="glass-panel p-5 rounded-xl border border-emerald-500/30 bg-gradient-to-b from-emerald-500/10 to-transparent hover:border-emerald-500/50 hover:bg-emerald-500/15 transition-all cursor-pointer group block"
+        >
           <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
-            <span className="font-medium">Revenue Recovered</span>
+            <span className="font-medium group-hover:text-emerald-300 transition-colors">Revenue Recovered</span>
             <span className="p-1.5 rounded-md bg-emerald-500/10 text-emerald-400">
               <CheckCircle2 size={14} />
             </span>
@@ -156,12 +165,15 @@ export default async function Dashboard() {
             <span className="text-emerald-400 font-medium">{stats?.recovery_rate || 0}% Recovery Rate</span>
             <span>Razorpay Webhook Confirmed</span>
           </div>
-        </div>
+        </Link>
 
         {/* Active Risk Cases */}
-        <div className="glass-panel p-5 rounded-xl border border-purple-500/20 bg-gradient-to-b from-purple-500/5 to-transparent">
+        <Link 
+          href="/risk-cases"
+          className="glass-panel p-5 rounded-xl border border-purple-500/20 bg-gradient-to-b from-purple-500/5 to-transparent hover:border-purple-500/40 hover:bg-purple-500/10 transition-all cursor-pointer group block"
+        >
           <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
-            <span className="font-medium">Active Risk Cases</span>
+            <span className="font-medium group-hover:text-purple-300 transition-colors">Active Risk Cases</span>
             <span className="p-1.5 rounded-md bg-purple-500/10 text-purple-400">
               <Sparkles size={14} />
             </span>
@@ -169,9 +181,9 @@ export default async function Dashboard() {
           <p className="text-3xl font-extrabold text-white tracking-tight">{activeCasesCount || cases.length}</p>
           <div className="flex items-center justify-between text-[11px] text-gray-400 mt-3 pt-2 border-t border-white/5">
             <span className="text-purple-400 font-medium">{cases.filter(c => c.status === 'pending_human_review').length} Pending Auth</span>
-            <Link href="/risk-cases" className="text-gray-300 hover:text-white underline">Explore cases</Link>
+            <span className="text-gray-300 group-hover:text-white underline">Explore cases</span>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* High-Visibility AI Revenue Insight Card */}
@@ -195,7 +207,7 @@ export default async function Dashboard() {
 
           <div className="shrink-0 flex items-center gap-3">
             <Link 
-              href="/investigations"
+              href="/investigations/INV-00000000"
               className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold shadow-[0_0_15px_rgba(168,85,247,0.4)] transition-all"
             >
               <span>Investigate Anomaly</span>

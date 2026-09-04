@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { 
-  ShieldAlert, Search, Filter, ArrowRight, 
-  CheckCircle2, Clock, AlertTriangle, Sparkles, RefreshCw
+  ShieldAlert, Search, ArrowRight, RefreshCw
 } from 'lucide-react';
 import { API_BASE } from "@/lib/config";
 
@@ -23,12 +23,23 @@ interface RiskCase {
   created_at?: string;
 }
 
-export default function RiskCasesPage() {
+function RiskCasesContent() {
+  const searchParams = useSearchParams();
+  const initialStatus = searchParams.get('status') || '';
+  const initialSeverity = searchParams.get('severity') || '';
+
   const [cases, setCases] = useState<RiskCase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [severityFilter, setSeverityFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
+  const [severityFilter, setSeverityFilter] = useState(initialSeverity);
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const s = searchParams.get('status');
+    const sev = searchParams.get('severity');
+    if (s !== null) setStatusFilter(s);
+    if (sev !== null) setSeverityFilter(sev);
+  }, [searchParams]);
 
   const loadCases = useCallback(async () => {
     try {
@@ -269,5 +280,13 @@ export default function RiskCasesPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RiskCasesPage() {
+  return (
+    <Suspense fallback={<div className="max-w-7xl mx-auto py-12 text-center text-gray-400">Loading risk cases...</div>}>
+      <RiskCasesContent />
+    </Suspense>
   );
 }

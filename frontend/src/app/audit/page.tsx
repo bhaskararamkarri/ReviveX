@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { 
-  Activity, Search, Filter, ShieldCheck, Sparkles, 
-  User, Server, Key, RefreshCw, CheckCircle2, AlertOctagon,
-  Bot, Lock, FileCode
+  Activity, Search, Sparkles, 
+  User, Server, RefreshCw, Lock
 } from 'lucide-react';
 import { API_BASE } from "@/lib/config";
 
@@ -51,11 +51,22 @@ function ResultBadge({ result }: { result: string }) {
   );
 }
 
-export default function AuditTrailPage() {
+function AuditTrailContent() {
+  const searchParams = useSearchParams();
+  const initialActor = searchParams.get('actor') || '';
+  const initialCaseId = searchParams.get('caseId') || '';
+
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actorFilter, setActorFilter] = useState('');
-  const [search, setSearch] = useState('');
+  const [actorFilter, setActorFilter] = useState(initialActor);
+  const [search, setSearch] = useState(initialCaseId);
+
+  useEffect(() => {
+    const act = searchParams.get('actor');
+    const cid = searchParams.get('caseId');
+    if (act !== null) setActorFilter(act);
+    if (cid !== null) setSearch(cid);
+  }, [searchParams]);
 
   const loadLogs = useCallback(async () => {
     try {
@@ -236,5 +247,13 @@ export default function AuditTrailPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function AuditTrailPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-400">Loading audit trail...</div>}>
+      <AuditTrailContent />
+    </Suspense>
   );
 }

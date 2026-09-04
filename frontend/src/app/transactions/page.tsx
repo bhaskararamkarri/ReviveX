@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { 
-  FileText, Search, Filter, RefreshCw, ArrowRight,
-  ShieldCheck, AlertCircle, CheckCircle2, Clock, Landmark, CreditCard, Smartphone
+  FileText, Search, RefreshCw, ArrowRight
 } from 'lucide-react';
 import { API_BASE } from "@/lib/config";
 
 interface Transaction {
   id: string;
-  order_id: string;
+  order_id?: string;
   amount: number;
   currency: string;
   status: string;
@@ -20,15 +20,29 @@ interface Transaction {
   error_code?: string | null;
   error_description?: string | null;
   created_at: string;
-  recovery_case_id?: string | null;
+  recovery_case?: {
+    id: string;
+    status: string;
+  } | null;
 }
 
-export default function TransactionsPage() {
+function TransactionsContent() {
+  const searchParams = useSearchParams();
+  const initialStatus = searchParams.get('status') || '';
+  const initialMethod = searchParams.get('method') || '';
+
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [methodFilter, setMethodFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
+  const [methodFilter, setMethodFilter] = useState(initialMethod);
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const s = searchParams.get('status');
+    const m = searchParams.get('method');
+    if (s !== null) setStatusFilter(s);
+    if (m !== null) setMethodFilter(m);
+  }, [searchParams]);
 
   const loadTransactions = useCallback(async () => {
     try {
@@ -237,5 +251,13 @@ export default function TransactionsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function TransactionsPage() {
+  return (
+    <Suspense fallback={<div className="max-w-7xl mx-auto py-12 text-center text-gray-400">Loading transactions...</div>}>
+      <TransactionsContent />
+    </Suspense>
   );
 }

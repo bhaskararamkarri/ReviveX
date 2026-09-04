@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { 
   FileText, ArrowLeft, CheckCircle2, Clock, 
-  AlertTriangle, ShieldCheck, Sparkles, Activity, Repeat, Link2
+  AlertTriangle, ShieldCheck, Sparkles, Activity, Repeat
 } from 'lucide-react';
 import { API_BASE } from "@/lib/config";
 
 interface TransactionDetail {
   id: string;
-  order_id: string;
+  order_id?: string;
+  merchant_id?: string;
   amount: number;
   currency: string;
   status: string;
@@ -21,8 +22,17 @@ interface TransactionDetail {
   error_code?: string | null;
   error_description?: string | null;
   created_at: string;
-  recovery_case_id?: string | null;
-  recovery_action?: any | null;
+  recovery_case?: {
+    id: string;
+    status: string;
+    risk_type?: string | null;
+    risk_severity?: string | null;
+    diagnosed_root_cause?: string | null;
+    confidence_score?: number | null;
+    final_action?: string | null;
+  } | null;
+  actions?: any[];
+  audit_trail?: any[];
 }
 
 export default function TransactionDetailPage() {
@@ -66,7 +76,7 @@ export default function TransactionDetailPage() {
     { step: 3, title: 'Gateway Error Detected', subtitle: `${txn.error_code || 'GATEWAY_TIMEOUT'} (2,400ms latency)`, status: 'DONE', icon: <AlertTriangle size={14} className="text-red-400" /> },
     { step: 4, title: 'AI Forensic Diagnosis', subtitle: 'Nemotron 70B classified as temporary_payment_failure', status: 'DONE', icon: <Sparkles size={14} className="text-purple-400" /> },
     { step: 5, title: 'Deterministic Policy Gate', subtitle: 'TEMPORARY_FAILURE_POLICY evaluated. Retries: 0 < 2', status: 'DONE', icon: <ShieldCheck size={14} className="text-emerald-400" /> },
-    { step: 6, title: 'Recovery Action Executed', subtitle: 'Razorpay Test Payment Link generated and sent to buyer', status: txn.recovery_action ? 'DONE' : 'SCHEDULED', icon: <Repeat size={14} className="text-blue-400" /> },
+    { step: 6, title: 'Recovery Action Executed', subtitle: 'Razorpay Test Payment Link generated and sent to buyer', status: txn.actions && txn.actions.length > 0 ? 'DONE' : 'SCHEDULED', icon: <Repeat size={14} className="text-blue-400" /> },
     { step: 7, title: 'Gateway Webhook Ingested', subtitle: 'payment_link.paid verified with cryptographic signature', status: txn.status === 'success' ? 'DONE' : 'PENDING', icon: <CheckCircle2 size={14} className="text-emerald-400" /> },
     { step: 8, title: 'Reconciliation & Audit Proved', subtitle: 'Ledger updated. Revenue restored to merchant balance', status: txn.status === 'success' ? 'DONE' : 'PENDING', icon: <Activity size={14} /> },
   ];
@@ -110,12 +120,12 @@ export default function TransactionDetailPage() {
           </div>
           <div className="p-3 rounded-lg bg-white/5 border border-white/5">
             <span className="text-gray-400 block mb-1">Recovery Case</span>
-            {txn.recovery_case_id ? (
-              <Link href={`/risk-cases/${txn.recovery_case_id}`} className="font-mono text-purple-300 hover:underline">
-                Linked Case
+            {txn.recovery_case?.id ? (
+              <Link href={`/risk-cases/${txn.recovery_case.id}`} className="font-mono text-purple-300 hover:underline">
+                {txn.recovery_case.id}
               </Link>
             ) : (
-              <span className="text-gray-400">Auto Linked</span>
+              <span className="text-gray-400">No recovery case</span>
             )}
           </div>
         </div>

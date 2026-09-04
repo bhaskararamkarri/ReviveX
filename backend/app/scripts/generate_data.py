@@ -12,20 +12,21 @@ from app.schemas import AIDiagnosisResponse, RootCauseEnum, RecommendedActionEnu
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def generate_synthetic_data(db: Session, num_transactions: int = 500):
+def generate_synthetic_data(db: Session, num_transactions: int = 500, merchant: Merchant = None):
     logger.info("Initializing database schema...")
     Base.metadata.create_all(bind=engine)
     
-    # 1. Create a synthetic merchant
-    merchant = db.query(Merchant).first()
+    # 1. Create a synthetic merchant if none provided
     if not merchant:
-        merchant = Merchant(
-            name="Acme Corp",
-            email="finance@acmecorp.com"
-        )
-        db.add(merchant)
-        db.commit()
-        db.refresh(merchant)
+        merchant = db.query(Merchant).first()
+        if not merchant:
+            merchant = Merchant(
+                name="Acme Corp",
+                email="finance@acmecorp.com"
+            )
+            db.add(merchant)
+            db.commit()
+            db.refresh(merchant)
         
         # Add basic rules
         rule = SafetyPolicy(

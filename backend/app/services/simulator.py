@@ -76,16 +76,32 @@ class SimulationEngine:
         error_code = "BAD_REQUEST_ERROR"
         status = "failed"
         method = "card"
+        sim_amount = payload.amount
         
         if payload.scenario == "temporary_failure":
             error_code = "TEMPORARY_ERROR"
+            method = "upi"
         elif payload.scenario == "hard_decline":
             error_code = "CARD_DECLINED"
+            method = "card"
         elif payload.scenario == "abandoned":
             status = "abandoned"
             error_code = None
+            method = "upi"
         elif payload.scenario == "fraud":
             error_code = "RISK_REJECTED"
+            payload.fraud_flag = True
+        elif payload.scenario == "high_value":
+            error_code = "TEMPORARY_ERROR"
+            method = "netbanking"
+            if sim_amount < 15000.0:
+                sim_amount = 25000.0
+        elif payload.scenario == "retry_limit":
+            error_code = "TEMPORARY_ERROR"
+            if payload.retry_count == 0:
+                payload.retry_count = 3
+        elif payload.scenario == "unknown":
+            error_code = "GATEWAY_ANOMALY_UNKNOWN"
         
         # --- STAGE 01: WEBHOOK RECEIVED & 02: SIGNATURE VERIFIED ---
         start_time = time.time()

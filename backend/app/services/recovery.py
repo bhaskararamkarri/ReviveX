@@ -92,16 +92,16 @@ class RecoveryEngine:
             if decision.decision == RecommendedActionEnum.retry:
                 # Deterministic simulation: If amount is even, it succeeds. If odd, it fails.
                 if int(transaction.amount) % 2 == 0:
-                    action_result_status = "completed"
-                    case.status = "recovered"
+                    action_result_status = "simulated_success"
+                    case.status = "simulated_success"
                 else:
                     action_result_status = "failed"
                     case.status = "failed"
                     
             elif decision.decision == RecommendedActionEnum.send_nudge:
                 # Nudges always successfully "send" in simulation
-                action_result_status = "completed"
-                case.status = "recovered" 
+                action_result_status = "simulated_success"
+                case.status = "simulated_success" 
                 
             elif decision.decision == RecommendedActionEnum.human_review:
                 action_result_status = "completed"

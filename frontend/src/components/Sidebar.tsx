@@ -60,8 +60,8 @@ export function Sidebar() {
           <div className="space-y-0.5">
             <NavItem href="/overview" icon={<LayoutDashboard size={16} />} label="Overview" active={isActive('/overview')} />
             <NavItem href="/incidents" icon={<AlertTriangle size={16} />} label="Incidents" active={isActive('/incidents')} />
-            <NavItem href="/risk-cases" icon={<ShieldAlert size={16} />} label="Risk Cases" active={isActive('/risk-cases') || isActive('/cases')} />
-            <NavItem href="/investigations" icon={<BrainCircuit size={16} />} label="Investigations" active={isActive('/investigations') || isActive('/investigation')} />
+            <NavItem href="/risk-cases" icon={<ShieldAlert size={16} />} label="Risk Cases" active={isActive('/risk-cases')} />
+            <NavItem href="/investigations" icon={<BrainCircuit size={16} />} label="Investigations" active={isActive('/investigations')} />
           </div>
         </div>
 
