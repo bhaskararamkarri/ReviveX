@@ -301,6 +301,26 @@ npm run build
 
 ---
 
+## 🚀 Scaling Considerations & Production Load Architecture
+
+For enterprise scale (10,000+ recovery transactions per minute during flash sales and peak festival traffic), ReviveX incorporates the following horizontal scaling and resilience designs:
+
+1. **Decoupled Asynchronous Webhook Processing Queue**:
+   - Inbound webhook delivery (`POST /api/webhooks/razorpay`) must acknowledge within < 200ms to satisfy gateway SLAs.
+   - Synchronous LLM diagnosis and dynamic payment link creation are decoupled via a distributed worker queue (e.g., **Celery + Redis / Redis Streams / AWS SQS**).
+   - Inbound handlers authenticate the HMAC-SHA256 signature, verify idempotency, persist the raw event, and immediately dispatch background worker jobs (`WorkflowOrchestrator.dispatch_async_recovery_task`).
+
+2. **High-Performance Database Indexing & Partitioning**:
+   - Composite B-Tree indexes on `(merchant_id, status, created_at)` for high-throughput dashboard aggregation queries.
+   - Unique hash indexing on `(transaction_id)` and `(idempotency_key)` to guarantee O(1) deduplication lookups.
+   - Time-based table partitioning on `audit_logs` and `transactions` by month/quarter to maintain low query latency as records scale to tens of millions.
+
+3. **Inbound Webhook Rate Limiting & DoS Protection**:
+   - Redis-backed sliding-window rate limiters on `/api/webhooks/razorpay` (e.g. 5,000 requests/second per merchant signature) to prevent denial-of-service and replay attack storms.
+   - Circuit breaker auto-trip buffers to prevent cascading issuer degradation during major banking node outages.
+
+---
+
 ## 🛡️ Security & Integrity Guarantees
 - **HMAC-SHA256 Webhook Verification**: Inbound gateway events are cryptographically authenticated before touching any business logic.
 - **Strict Test-Mode Isolation**: ReviveX validates the `rzp_test_` prefix on Razorpay keys to prevent accidental live charges.

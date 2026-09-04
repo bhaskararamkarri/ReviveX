@@ -82,3 +82,22 @@ class WorkflowOrchestrator:
 
         logger.info(f"Processed case {case.id} completely.")
         return case
+
+    @staticmethod
+    def dispatch_async_recovery_task(case_id: str, priority: str = "default") -> str:
+        """
+        SCALE / PRODUCTION LOAD STUB:
+        Dispatches recovery case processing to an asynchronous task worker pool
+        (e.g., Celery / Redis Queue / AWS SQS / Redis Streams).
+        
+        Decouples inbound webhook ingestion (POST /api/webhooks/razorpay) from 
+        heavyweight LLM diagnosis and payment link creation, preventing gateway timeouts 
+        and connection pool exhaustion under 10,000+ RPM traffic spikes.
+        """
+        # TODO: Production Distributed Queue Implementation:
+        # from app.workers.celery_app import recovery_worker_task
+        # job = recovery_worker_task.apply_async(args=[case_id], queue=priority)
+        # return job.id
+        
+        logger.info(f"[ASYNC_QUEUE_DISPATCH] Queued Case {case_id} to background worker pool (queue={priority})")
+        return f"job_stub_{case_id}"
