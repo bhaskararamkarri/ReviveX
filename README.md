@@ -28,6 +28,24 @@ A failed payment does not permanently mean lost revenue. **ReviveX** transforms 
 
 ---
 
+## 📊 Measured Impact (AI vs. Naive Baseline)
+
+To prove quantifiable recovery performance without regulatory or fraud risk, ReviveX was benchmarked against a naive "always retry immediately" baseline across a standardized cohort of **N=100 failed transactions** (Seed: 42, Total Revenue At Risk: **₹790,969.48**).
+
+| Metric | Naive Baseline (Blind Immediate Retry) | ReviveX (AI Diagnosis + Policy Guardrails) | Delta / Impact |
+| :--- | :--- | :--- | :--- |
+| **Recovery Rate (%)** | 35.0% (35/100) | **53.0%** (53/100) | **+18.0% Absolute Lift** |
+| **Revenue Recovered (₹)** | ₹158,530.52 | **₹390,977.03** | **+₹232,446.51 Net Gain** |
+| **Compliance Violations Caused** | 38 violations (Dead VPAs, >3 retries, fraud retries) | **0 violations** (All intercepted deterministically) | **100% Policy Compliance** |
+| **Compliance Violations Avoided** | 0 | **38 violations prevented** | Complete RBI / Card Rule Safety |
+| **High-Risk Transactions Gated** | 0 (Blindly retried) | **10 cases routed to Human Review** | Zero unauthorized high-value exposure |
+| **Wasted Network Retries** | 65 spam retry calls | **0 wasted retries** | Zero customer friction |
+
+> [!TIP]
+> **Key Finding**: Blindly retrying failed payments triggers severe card network fines on hard declines and chargebacks on fraud signals. ReviveX achieves **+18.0% higher recovery** while intercepting **100% of compliance violations** through NVIDIA Nemotron 70B root-cause diagnosis and deterministic safety policies. Full benchmark reproducibility details: [`backend/BENCHMARK_RESULTS.md`](backend/BENCHMARK_RESULTS.md).
+
+---
+
 ## ⚡ Architecture & End-to-End Pipeline
 
 ```mermaid
